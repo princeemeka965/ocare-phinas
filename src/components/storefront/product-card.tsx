@@ -18,6 +18,7 @@ export interface ProductCardData {
   stockQuantity: number;
   stockLabel: "In stock" | "Low stock" | "Out of stock";
   categorySlug: string;
+  condition?: "new" | "pre_owned";
   badge?: string;
   image?: string;
 }
@@ -113,6 +114,18 @@ export function ProductCard({ product }: { product: ProductCardData }) {
               {product.badge}
             </span>
           )}
+          {product.condition && (
+            <span
+              className={cn(
+                "absolute top-3 right-3 rounded-full px-2.5 py-0.5 text-micro font-semibold ring-1",
+                product.condition === "new"
+                  ? "bg-primary/15 text-primary ring-primary/30"
+                  : "bg-accent/15 text-accent-foreground ring-accent/30",
+              )}
+            >
+              {product.condition === "new" ? "New" : "Pre-owned"}
+            </span>
+          )}
         </div>
       </Link>
 
@@ -140,7 +153,7 @@ export function ProductCard({ product }: { product: ProductCardData }) {
 
         <Button
           size="sm"
-          className="w-full gap-2 !py-5 !text-white"
+          className="w-full gap-2 !py-5"
           onClick={handleAddToCart}
           disabled={outOfStock}
           aria-label={

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Search,
   ShoppingCart,
@@ -10,6 +11,11 @@ import {
   Package,
   LogOut,
   ChevronDown,
+  Wallet,
+  ShoppingBag,
+  Tag,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -20,6 +26,14 @@ import { Container } from "@/components/layout/container";
 import { useCartStore, cartItemCount } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { Logo } from "@/components/storefront/logo";
+import { isMinimalChrome } from "@/lib/chrome-routes";
+
+const PRIMARY_NAV = [
+  { label: "Shop All", href: "/products", icon: ShoppingBag },
+  { label: "Shop by Brand", href: "/brands", icon: Tag },
+  { label: "Pay Small Small", href: "/pay-small-small", icon: Wallet, highlight: true },
+  { label: "Pre-owned", href: "/category/pre-owned", icon: RefreshCw },
+];
 
 export function StorefrontHeader() {
   const [scrolled, setScrolled] = useState(false);
@@ -32,8 +46,9 @@ export function StorefrontHeader() {
   const user = useUserStore((s) => s.user);
   const clearUser = useUserStore((s) => s.clearUser);
   const accountRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const minimal = isMinimalChrome(pathname);
 
-  // Avoid hydration mismatch for cart count (persisted store)
   useEffect(() => setMounted(true), []);
   const count = mounted ? cartItemCount(items) : 0;
 
@@ -61,7 +76,6 @@ export function StorefrontHeader() {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  // Lock body scroll when mobile menu is open
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -95,8 +109,7 @@ export function StorefrontHeader() {
               <Logo className="h-9 sm:h-10" />
             </Link>
 
-            {/* Centre — search, absolutely positioned so it's always centred
-                regardless of logo / actions widths (laptop+) */}
+            {/* Centre — search (laptop+) */}
             <form
               onSubmit={handleSearch}
               className="absolute left-1/2 -translate-x-1/2 hidden lg:block w-full max-w-md xl:max-w-lg"
@@ -161,7 +174,7 @@ export function StorefrontHeader() {
                   {accountOpen && (
                     <div
                       role="menu"
-                      className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-border bg-card shadow-lg py-1.5 animate-[fade-in-down_0.15s_ease-out]"
+                      className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-border bg-card shadow-lg py-1.5 animate-[fade-in-down_0.15s_ease-out]"
                     >
                       <Link
                         href="/orders"
@@ -170,6 +183,14 @@ export function StorefrontHeader() {
                         onClick={() => setAccountOpen(false)}
                       >
                         <Package className="size-4" /> My Orders
+                      </Link>
+                      <Link
+                        href="/pay-small-small/my-plan"
+                        role="menuitem"
+                        className="flex items-center gap-2 px-3 py-2 text-body-sm hover:bg-muted rounded-lg mx-1 transition-colors"
+                        onClick={() => setAccountOpen(false)}
+                      >
+                        <Wallet className="size-4" /> My Plan
                       </Link>
                       <Link
                         href="/profile"
@@ -219,16 +240,42 @@ export function StorefrontHeader() {
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
                 aria-expanded={mobileOpen}
               >
-                {mobileOpen ? (
-                  <X className="size-5" />
-                ) : (
-                  <Menu className="size-5" />
-                )}
+                {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
               </Button>
             </div>
           </div>
 
-          {/* Search — below header row on anything smaller than laptop */}
+          {/* Primary nav strip — desktop only (hidden on auth / focused flows) */}
+          {!minimal && (
+          <nav
+            aria-label="Primary navigation"
+            className="hidden lg:flex items-center gap-1 border-t border-border/40 py-1 -mx-1 px-1"
+          >
+            {PRIMARY_NAV.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-medium transition-colors",
+                    item.highlight
+                      ? "bg-accent text-accent-foreground font-semibold shadow-sm hover:bg-accent/90"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  )}
+                >
+                  <Icon className="size-3.5" aria-hidden />
+                  {item.label}
+                  {item.highlight && (
+                    <Sparkles className="size-3 text-accent-foreground" aria-hidden />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+          )}
+
+          {/* Search — mobile (below main row) */}
           <div className="lg:hidden pb-3">
             <form onSubmit={handleSearch} className="relative">
               <Search
@@ -278,6 +325,35 @@ export function StorefrontHeader() {
         </div>
 
         <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100%-4rem)]">
+          {/* Primary nav links — hidden on auth / focused flows */}
+          {!minimal && (
+          <div className="pb-2 mb-2 border-b border-border space-y-0.5">
+            {PRIMARY_NAV.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm font-medium transition-colors",
+                    item.highlight
+                      ? "bg-accent text-accent-foreground font-semibold hover:bg-accent/90"
+                      : "hover:bg-muted",
+                  )}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Icon className="size-4 flex-shrink-0" aria-hidden />
+                  {item.label}
+                  {item.highlight && (
+                    <Sparkles className="size-3 text-accent-foreground ml-auto" aria-hidden />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+          )}
+
+          {/* Account section */}
           {user ? (
             <>
               <div className="px-3 py-3 mb-2 rounded-xl bg-muted/50">
@@ -290,6 +366,13 @@ export function StorefrontHeader() {
                 onClick={() => setMobileOpen(false)}
               >
                 <Package className="size-4 text-muted-foreground" /> My Orders
+              </Link>
+              <Link
+                href="/pay-small-small/my-plan"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Wallet className="size-4 text-muted-foreground" /> My Plan
               </Link>
               <Link
                 href="/profile"

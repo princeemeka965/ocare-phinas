@@ -8,6 +8,7 @@ import {
   Camera,
   Gamepad2,
   TabletSmartphone,
+  RefreshCw,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const categories = [
   { name: "Accessories", slug: "accessories", icon: Cable },
   { name: "Gaming", slug: "gaming", icon: Gamepad2 },
   { name: "Cameras", slug: "cameras", icon: Camera },
+  { name: "Pre-owned", slug: "pre-owned", icon: RefreshCw },
 ];
 
 interface CategoryNavProps {

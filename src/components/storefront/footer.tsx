@@ -1,27 +1,35 @@
 import Link from "next/link";
-import { Phone, MessageCircle } from "lucide-react";
+import { Phone, MessageCircle, ExternalLink } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Logo } from "@/components/storefront/logo";
 
 const quickLinks = [
   { label: "About Us", href: "/about" },
-  { label: "How to Pay", href: "/how-to-pay" },
-  { label: "Delivery Info", href: "/delivery" },
   { label: "Contact Us", href: "/contact" },
+  { label: "Pre-owned Items", href: "/category/pre-owned" },
+  { label: "Shop by Brand", href: "/brands" },
 ];
 
 const accountLinks = [
   { label: "Register", href: "/register" },
   { label: "Log In", href: "/login" },
   { label: "My Orders", href: "/orders" },
+  { label: "My Profile", href: "/profile" },
+];
+
+const pssLinks = [
+  { label: "How It Works", href: "/pay-small-small" },
+  { label: "Join a Group", href: "/pay-small-small/join" },
+  { label: "Start a Solo Plan", href: "/pay-small-small/solo" },
+  { label: "My Plan", href: "/pay-small-small/my-plan" },
 ];
 
 export function StorefrontFooter() {
   return (
     <footer className="border-t border-border bg-card mt-auto" aria-label="Site footer">
       <Container>
-        <div className="py-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="py-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-4 sm:col-span-2 lg:col-span-1">
             <Link href="/" aria-label="OCare Phinas home">
@@ -38,6 +46,7 @@ export function StorefrontFooter() {
                 <Phone className="size-3.5 shrink-0" />
                 <span>+234 000 000 0000</span>
               </a>
+              {/* Payment WhatsApp — from Settings in Phase 3 */}
               <a
                 href="https://wa.me/2340000000000"
                 target="_blank"
@@ -45,7 +54,8 @@ export function StorefrontFooter() {
                 className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#25D366] px-3 py-1.5 text-caption font-medium text-white hover:bg-[#1eb85a] transition-colors"
               >
                 <MessageCircle className="size-3.5" />
-                Chat on WhatsApp
+                Send Payment Screenshot
+                <ExternalLink className="size-3" />
               </a>
             </div>
           </div>
@@ -55,6 +65,26 @@ export function StorefrontFooter() {
             <h2 className="text-body-sm font-semibold mb-3">Quick Links</h2>
             <ul className="space-y-2">
               {quickLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-body-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Pay Small Small */}
+          <div>
+            <h2 className="text-body-sm font-semibold mb-3">Pay Small Small</h2>
+            <p className="text-caption text-muted-foreground mb-3">
+              Own quality gadgets by saving a little daily — no interest, no stress.
+            </p>
+            <ul className="space-y-2">
+              {pssLinks.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
@@ -92,10 +122,10 @@ export function StorefrontFooter() {
                 Bank Transfer Only
               </p>
               <p className="text-caption text-muted-foreground">
-                We confirm all transfers manually, usually within 2 hours on business days.
+                Transfer to our account, then send your screenshot on WhatsApp. We confirm manually, usually within 2 hours on business days.
               </p>
               <p className="text-caption text-muted-foreground">
-                Always include your <strong>order reference number</strong> in the transfer narration so we can match your payment instantly.
+                Always include your <strong>order reference</strong> in the transfer narration so we can match your payment instantly.
               </p>
             </div>
           </div>

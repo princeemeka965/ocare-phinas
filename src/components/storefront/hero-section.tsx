@@ -106,7 +106,7 @@ export function HeroSection() {
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(100deg, oklch(0.09 0.025 230 / 0.97) 0%, oklch(0.11 0.035 215 / 0.85) 40%, oklch(0.1 0.03 210 / 0.55) 70%, oklch(0.1 0.03 210 / 0.3) 100%)",
+            "linear-gradient(100deg, oklch(0.09 0.02 150 / 0.97) 0%, oklch(0.11 0.03 150 / 0.85) 40%, oklch(0.10 0.02 150 / 0.55) 70%, oklch(0.10 0.02 150 / 0.3) 100%)",
         }}
       />
       {/* Bottom vignette */}
@@ -115,7 +115,7 @@ export function HeroSection() {
         className="absolute bottom-0 left-0 right-0 h-40"
         style={{
           background:
-            "linear-gradient(to top, oklch(0.09 0.025 230 / 0.7), transparent)",
+            "linear-gradient(to top, oklch(0.09 0.02 150 / 0.7), transparent)",
         }}
       />
       {/* Film-grain texture — adds depth */}
@@ -173,7 +173,7 @@ export function HeroSection() {
               style={{ animation: "fade-in-up 0.6s ease-out 0.3s both" }}
             >
               <Link
-                href="/category/phones"
+                href="/products"
                 className={cn(
                   buttonVariants({ size: "lg" }),
                   "gap-2 shadow-xl shadow-primary/25 hover:shadow-primary/45 transition-shadow",
@@ -226,7 +226,7 @@ export function HeroSection() {
                 key={stat.label}
                 className="rounded-2xl border border-white/10 bg-white/[0.06] backdrop-blur-md px-5 py-4 hover:bg-white/[0.1] transition-colors"
               >
-                <p className="text-h3 font-bold text-primary">{stat.value}</p>
+                <p className="text-h3 font-bold hero-gradient-text">{stat.value}</p>
                 <p className="text-caption text-white/55 mt-0.5">{stat.label}</p>
               </div>
             ))}
@@ -276,7 +276,7 @@ export function HeroSection() {
 
       <style>{`
         .hero-gradient-text {
-          background: linear-gradient(90deg, oklch(0.75 0.14 195), oklch(0.85 0.10 180));
+          background: linear-gradient(90deg, oklch(0.75 0.15 150), oklch(0.82 0.17 78));
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
