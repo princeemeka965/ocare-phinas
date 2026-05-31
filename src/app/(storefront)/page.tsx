@@ -279,21 +279,21 @@ function PaySmallSmallPromo() {
               </span>
             </h2>
             <p className="text-body-lg text-white/80 mb-8 max-w-[42ch] mx-auto lg:mx-0">
-              Pay ₦1,000 daily for 50 days and claim a quality gadget worth up to ₦50,000.
-              Join a group with others or run your own solo plan — no interest, no stress.
+              Pick any item and pay for it your way — daily, weekly or monthly, at a budget you set.
+              We deliver once you&apos;re halfway. No interest, no price cap.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link
-                href="/pay-small-small/join"
+                href="/pay-small-small/solo"
                 className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg font-semibold text-body text-primary bg-white hover:bg-white/90 transition-colors"
               >
-                <Users className="size-4" /> Join a Group
+                <User className="size-4" /> Start a Solo Plan
               </Link>
               <Link
-                href="/pay-small-small/solo"
+                href="/pay-small-small/join"
                 className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg font-semibold text-body text-white border border-white/30 bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-colors"
               >
-                <User className="size-4" /> Start Your Own Plan
+                <Users className="size-4" /> Join a Group
               </Link>
             </div>
             <p className="mt-5 text-caption text-white/50">
@@ -304,10 +304,10 @@ function PaySmallSmallPromo() {
           {/* Stats cards */}
           <div className="flex-shrink-0 grid grid-cols-2 gap-3 w-full max-w-xs lg:max-w-[280px]">
             {[
-              { value: "₦1,000", label: "per day" },
-              { value: "50 days", label: "duration" },
-              { value: "₦50,000", label: "target value" },
-              { value: "10 members", label: "per group" },
+              { value: "Any item", label: "no price cap" },
+              { value: "You set", label: "the amount" },
+              { value: "Daily/wkly/mthly", label: "your schedule" },
+              { value: "50% paid", label: "we deliver" },
             ].map((s) => (
               <div
                 key={s.label}

@@ -20,10 +20,11 @@ const accountLinks = [
 
 const pssLinks = [
   { label: "How It Works", href: "/pay-small-small" },
-  { label: "Join a Group", href: "/pay-small-small/join" },
   { label: "Start a Solo Plan", href: "/pay-small-small/solo" },
+  { label: "Join a Group", href: "/pay-small-small/join" },
   { label: "My Plan", href: "/pay-small-small/my-plan" },
 ];
+
 
 export function StorefrontFooter() {
   return (
@@ -81,7 +82,7 @@ export function StorefrontFooter() {
           <div>
             <h2 className="text-body-sm font-semibold mb-3">Pay Small Small</h2>
             <p className="text-caption text-muted-foreground mb-3">
-              Own quality gadgets by saving a little daily — no interest, no stress.
+              Own any gadget by paying at your own pace — daily, weekly or monthly. No interest, no stress.
             </p>
             <ul className="space-y-2">
               {pssLinks.map((link) => (

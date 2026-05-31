@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
+import { useUserStore } from "@/store/userStore";
 
-export default function RegisterPage() {
+/** Only allow internal redirect targets (avoid open redirects). */
+function safeNext(raw: string | null): string {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+}
+
+function RegisterForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const setUser = useUserStore((s) => s.setUser);
+  const next = safeNext(params.get("next"));
+
   const [showPassword, setShowPassword] = useState(false);
   const [pssOptIn, setPssOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,6 +30,7 @@ export default function RegisterPage() {
     const fd = new FormData(e.currentTarget);
     const newErrors: Record<string, string> = {};
 
+    const name = (fd.get("name") as string) || "";
     const email = fd.get("email") as string;
     const phone = fd.get("phone") as string;
     const password = fd.get("password") as string;
@@ -36,10 +49,12 @@ export default function RegisterPage() {
 
     setErrors({});
     setLoading(true);
-    // Phase 3: wire up registration API → OTP verification
+    // Phase 3: wire up registration API → OTP verification.
+    // For now, create the account session immediately.
     await new Promise((r) => setTimeout(r, 1000));
+    setUser({ id: "u-demo", email, name: name.trim() || email.split("@")[0] });
     setLoading(false);
-    // On success: route to /verify (A8)
+    router.push(next);
   }
 
   const field = (id: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -110,7 +125,7 @@ export default function RegisterPage() {
               <div>
                 <p className="text-body-sm font-medium">Join a Pay Small Small plan (optional)</p>
                 <p className="text-caption text-muted-foreground mt-0.5">
-                  Save ₦1,000/day for 50 days and claim a gadget worth up to ₦50,000. You can always join later — shopping works normally without a plan.
+                  Pick any item and pay for it your way — daily, weekly or monthly, at your own budget. You can always start later — shopping works normally without a plan.
                 </p>
               </div>
             </label>
@@ -131,11 +146,22 @@ export default function RegisterPage() {
 
         <p className="text-center text-body-sm text-muted-foreground mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-primary font-medium hover:underline">
+          <Link
+            href={next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+            className="text-primary font-medium hover:underline"
+          >
             Log in
           </Link>
         </p>
       </Container>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="py-12 sm:py-16" />}>
+      <RegisterForm />
+    </Suspense>
   );
 }

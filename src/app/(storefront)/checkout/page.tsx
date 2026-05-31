@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useCartStore, cartItemCount, cartSubtotal } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { toast } from "@/store/toastStore";
+import { AuthRequired } from "@/components/storefront/auth-required";
 
 /* Nigerian states — delivery fees are mocked here; in Phase 3 they come from Settings (B10). */
 const NG_STATES = [
@@ -64,6 +65,16 @@ export default function CheckoutPage() {
   useEffect(() => setMounted(true), []);
 
   if (!mounted) return null;
+
+  /* Must be logged in to check out. */
+  if (!user) {
+    return (
+      <AuthRequired
+        title="Log in to check out"
+        description="You need an account to place an order and track its payment. Your cart will be waiting for you."
+      />
+    );
+  }
 
   const count = cartItemCount(items);
   const subtotal = cartSubtotal(items);

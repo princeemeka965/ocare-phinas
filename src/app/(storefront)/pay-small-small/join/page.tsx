@@ -34,7 +34,7 @@ const openGroups = MOCK_GROUPS.filter((g) => g.status === "open");
 export default function JoinGroupPage() {
   return (
     <div className="py-8 sm:py-12">
-      <Container className="max-w-2xl">
+      <Container className="max-w-4xl">
         <Link href="/pay-small-small" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mb-6 gap-2")}>
           <ArrowLeft className="size-4" /> Pay Small Small
         </Link>
@@ -143,7 +143,7 @@ export default function JoinGroupPage() {
           <div className="rounded-2xl border border-dashed border-border p-10 text-center mb-8">
             <p className="text-h3 font-semibold mb-2">No open groups right now</p>
             <p className="text-body-sm text-muted-foreground mb-5">
-              All groups are currently full. Try starting a solo plan or check back later.
+              All groups are currently full. A solo plan has no waiting — pick any item and set your own pace.
             </p>
             <Link href="/pay-small-small/solo" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
               Start a solo plan instead
@@ -152,9 +152,9 @@ export default function JoinGroupPage() {
         )}
 
         <div className="rounded-xl border border-border bg-muted/50 p-4">
-          <p className="text-body-sm font-semibold mb-1">Don&apos;t want to join a group?</p>
+          <p className="text-body-sm font-semibold mb-1">Prefer to go at your own pace?</p>
           <p className="text-body-sm text-muted-foreground mb-3">
-            Start your own solo plan — same daily amount, no group needed.
+            Start a solo plan instead — pick any item and pay daily, weekly or monthly, at your own budget. No group, no fixed amount.
           </p>
           <Link href="/pay-small-small/solo" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2")}>
             Start a solo plan

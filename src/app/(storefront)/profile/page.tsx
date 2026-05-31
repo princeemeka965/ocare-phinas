@@ -16,19 +16,33 @@ const MOCK_PROFILE = {
   phone: "08012345678",
   phoneVerified: true,
   plan: {
-    type: "group" as const,
-    reference: "G-013",
-    dayCurrent: 12,
-    dayTotal: 50,
-    amountSaved: 12000,
-    amountTarget: 50000,
+    type: "solo" as "group" | "solo",
+    reference: "SOLO-0042",
+    frequency: "weekly" as "daily" | "weekly" | "monthly",
+    paymentsMade: 9,
+    amountSaved: 90000,
+    amountTarget: 350000,
   },
 };
+
+const INPUT_CLASS =
+  "w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors";
 
 export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const profile = MOCK_PROFILE;
+
+  const initials = profile.name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const planProgress = profile.plan
+    ? (profile.plan.amountSaved / profile.plan.amountTarget) * 100
+    : 0;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -41,129 +55,131 @@ export default function ProfilePage() {
 
   return (
     <div className="py-8 sm:py-12">
-      <Container className="max-w-2xl">
+      <Container className="max-w-5xl">
         <h1 className="text-h1 font-bold mb-8">My Profile</h1>
 
-        <div className="space-y-5">
-          {/* Plan tag */}
-          {profile.plan && (
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-                    <Wallet className="size-5 text-primary" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Sidebar: identity + plan */}
+          <aside className="lg:col-span-1 space-y-6">
+            {/* Identity card */}
+            <div className="rounded-2xl border border-border bg-card p-6 text-center">
+              <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 text-primary text-h2 font-bold mx-auto mb-4">
+                {initials}
+              </div>
+              <p className="text-body font-semibold">{profile.name}</p>
+              <p className="text-body-sm text-muted-foreground break-all">{profile.email}</p>
+              {profile.phoneVerified && (
+                <span className="inline-flex items-center gap-1 mt-3 rounded-full bg-success/10 px-2.5 py-1 text-micro font-semibold text-success">
+                  <CheckCircle className="size-3" /> Phone verified
+                </span>
+              )}
+            </div>
+
+            {/* Plan tag */}
+            {profile.plan && (
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
+                    <Wallet className="size-4 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-body-sm font-semibold">
-                      Pay Small Small — {profile.plan.type === "group" ? `Group #${profile.plan.reference}` : "Solo Plan"}
-                    </p>
-                    <p className="text-caption text-muted-foreground">
-                      Day {profile.plan.dayCurrent} / {profile.plan.dayTotal} · ₦{profile.plan.amountSaved.toLocaleString("en-NG")} saved of ₦{profile.plan.amountTarget.toLocaleString("en-NG")}
-                    </p>
-                    {/* Progress bar */}
-                    <div className="mt-2 h-1.5 w-48 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${(profile.plan.amountSaved / profile.plan.amountTarget) * 100}%` }}
-                      />
-                    </div>
-                  </div>
+                  <p className="text-body-sm font-semibold">
+                    {profile.plan.type === "group" ? `Group #${profile.plan.reference}` : "Solo Plan"}
+                  </p>
+                </div>
+                <p className="text-caption text-muted-foreground capitalize mb-3">
+                  {profile.plan.paymentsMade} {profile.plan.frequency} payments · ₦{profile.plan.amountSaved.toLocaleString("en-NG")} of ₦{profile.plan.amountTarget.toLocaleString("en-NG")}
+                </p>
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-4">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500"
+                    style={{ width: `${planProgress}%` }}
+                  />
                 </div>
                 <Link
                   href="/pay-small-small/my-plan"
-                  className="flex items-center gap-1.5 text-body-sm text-primary font-medium hover:underline flex-shrink-0"
+                  className="flex items-center justify-between gap-1.5 text-body-sm text-primary font-medium hover:underline"
                 >
                   View my plan <ChevronRight className="size-4" />
                 </Link>
               </div>
-            </div>
-          )}
+            )}
+          </aside>
 
-          {/* Personal info */}
-          <div className="rounded-2xl border border-border bg-card p-6">
-            <div className="flex items-center gap-2 mb-5">
-              <User className="size-5 text-primary" />
-              <h2 className="text-body font-semibold">Personal information</h2>
-            </div>
+          {/* Main: forms */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Personal info */}
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <User className="size-5 text-primary" />
+                <h2 className="text-body font-semibold">Personal information</h2>
+              </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-body-sm font-medium">Full name</label>
-                  <input
-                    type="text"
-                    defaultValue={profile.name}
-                    className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-body-sm font-medium">Email address</label>
-                  <input
-                    type="email"
-                    defaultValue={profile.email}
-                    className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <label className="text-body-sm font-medium">Phone number</label>
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-body-sm font-medium">Full name</label>
+                    <input type="text" defaultValue={profile.name} className={INPUT_CLASS} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-body-sm font-medium">Email address</label>
+                    <input type="email" defaultValue={profile.email} className={INPUT_CLASS} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-body-sm font-medium">Phone number</label>
+                      {profile.phoneVerified && (
+                        <span className="flex items-center gap-1 text-micro font-semibold text-success">
+                          <CheckCircle className="size-3" /> Verified
+                        </span>
+                      )}
+                    </div>
+                    <input type="tel" defaultValue={profile.phone} className={INPUT_CLASS} />
                     {profile.phoneVerified && (
-                      <span className="flex items-center gap-1 text-micro font-semibold text-success">
-                        <CheckCircle className="size-3" /> Verified
-                      </span>
+                      <p className="text-caption text-muted-foreground">
+                        Changing your phone number requires re-verification.
+                      </p>
                     )}
                   </div>
-                  <input
-                    type="tel"
-                    defaultValue={profile.phone}
-                    className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
-                  />
-                  {profile.phoneVerified && (
-                    <p className="text-caption text-muted-foreground">
-                      Changing your phone number requires re-verification.
-                    </p>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button type="submit" size="sm" className="gap-2" disabled={saving}>
+                    <Save className="size-4" />
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
+                  {saved && (
+                    <span className="flex items-center gap-1.5 text-caption text-success font-medium">
+                      <CheckCircle className="size-3.5" /> Saved
+                    </span>
                   )}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <Button type="submit" size="sm" className="gap-2" disabled={saving}>
-                  <Save className="size-4" />
-                  {saving ? "Saving…" : "Save changes"}
-                </Button>
-                {saved && (
-                  <span className="flex items-center gap-1.5 text-caption text-success font-medium">
-                    <CheckCircle className="size-3.5" /> Saved
-                  </span>
-                )}
-              </div>
-            </form>
-          </div>
-
-          {/* Security */}
-          <div className="rounded-2xl border border-border bg-card p-6">
-            <div className="flex items-center gap-2 mb-5">
-              <Shield className="size-5 text-primary" />
-              <h2 className="text-body font-semibold">Security</h2>
+              </form>
             </div>
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-body-sm font-medium">Current password</label>
-                  <input type="password" placeholder="••••••••" className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors" />
-                </div>
-                <div />
-                <div className="space-y-1.5">
-                  <label className="text-body-sm font-medium">New password</label>
-                  <input type="password" placeholder="At least 8 characters" className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-body-sm font-medium">Confirm new password</label>
-                  <input type="password" placeholder="Repeat new password" className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors" />
-                </div>
+
+            {/* Security */}
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <Shield className="size-5 text-primary" />
+                <h2 className="text-body font-semibold">Security</h2>
               </div>
-              <Button type="submit" size="sm" variant="outline">Change password</Button>
-            </form>
+              <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-body-sm font-medium">Current password</label>
+                    <input type="password" placeholder="••••••••" className={INPUT_CLASS} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-body-sm font-medium">New password</label>
+                    <input type="password" placeholder="At least 8 characters" className={INPUT_CLASS} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-body-sm font-medium">Confirm new password</label>
+                    <input type="password" placeholder="Repeat new password" className={INPUT_CLASS} />
+                  </div>
+                </div>
+                <Button type="submit" size="sm" variant="outline">Change password</Button>
+              </form>
+            </div>
           </div>
         </div>
       </Container>

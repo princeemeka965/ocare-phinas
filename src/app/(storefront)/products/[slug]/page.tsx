@@ -73,8 +73,10 @@ const RELATED = [
   { id: "5", name: 'MacBook Air 13" M3 256GB', slug: "macbook-air-m3", brand: "Apple", price: 119990, stockQuantity: 3, stockLabel: "Low stock" as const, categorySlug: "laptops", condition: "new" as const, image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=400&fit=crop&q=85" },
 ];
 
-const PSS_ELIGIBLE_THRESHOLD = 50000;
-const PSS_DAYS = 50;
+/* Solo plans have no price cap — every in-catalogue item can be paid small small.
+   This "from" figure is just an illustrative low daily amount (~6-month horizon);
+   the customer sets their own amount and frequency in the plan builder. */
+const PSS_SAMPLE_HORIZON_DAYS = 180;
 
 function formatPrice(n: number) {
   return `₦${n.toLocaleString("en-NG")}`;
@@ -88,8 +90,8 @@ export default function ProductDetailPage() {
   const product = MOCK_PRODUCT;
   const outOfStock = product.stockQuantity === 0;
   const lowStock = product.stockQuantity > 0 && product.stockQuantity <= 5;
-  const isPSSEligible = product.price <= PSS_ELIGIBLE_THRESHOLD * 1.3;
-  const perDay = Math.ceil(product.price / PSS_DAYS / 100) * 100;
+  const isPSSEligible = true; // any item qualifies — solo plans have no cap
+  const perDay = Math.ceil(product.price / PSS_SAMPLE_HORIZON_DAYS / 100) * 100;
   const imageCount = product.images.length;
 
   function handleAddToCart() {
@@ -230,10 +232,10 @@ export default function ProductDetailPage() {
               </span>
 
               {isPSSEligible && (
-                <p className="text-body-sm text-muted-foreground flex items-center gap-1.5">
+                <p className="text-body-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
                   <Wallet className="size-4 text-accent-foreground" />
                   Or pay from{" "}
-                  <strong className="text-foreground">{formatPrice(perDay)}/day</strong> with Pay Small Small
+                  <strong className="text-foreground">{formatPrice(perDay)}/day</strong> — daily, weekly or monthly with Pay Small Small
                 </p>
               )}
 
@@ -298,7 +300,7 @@ export default function ProductDetailPage() {
 
                 {isPSSEligible && (
                   <Link
-                    href={`/pay-small-small/solo?item=${product.slug}`}
+                    href={`/pay-small-small/solo?item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(product.images[0])}`}
                     className={cn(
                       buttonVariants({ variant: "outline", size: "lg" }),
                       "flex-1 gap-2",

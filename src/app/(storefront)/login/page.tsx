@@ -1,16 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, LogIn } from "lucide-react";
-import type { Metadata } from "next";
 
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useUserStore } from "@/store/userStore";
 
-export default function LoginPage() {
+/** Derive a display name from the email local part (mock only). */
+function nameFromEmail(email: string): string {
+  const local = email.split("@")[0] || "Customer";
+  return (
+    local
+      .replace(/[._-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim() || "Customer"
+  );
+}
+
+/** Only allow internal redirect targets (avoid open redirects). */
+function safeNext(raw: string | null): string {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const setUser = useUserStore((s) => s.setUser);
+  const next = safeNext(params.get("next"));
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,10 +41,13 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    // Phase 3: wire up auth API
-    await new Promise((r) => setTimeout(r, 800));
-    setError("Invalid email or password.");
+    const fd = new FormData(e.currentTarget);
+    const email = ((fd.get("email") as string) || "").trim();
+    // Phase 3: wire up real auth API. For now any credentials sign you in.
+    await new Promise((r) => setTimeout(r, 600));
+    setUser({ id: "u-demo", email, name: nameFromEmail(email) });
     setLoading(false);
+    router.push(next);
   }
 
   return (
@@ -42,6 +67,7 @@ export default function LoginPage() {
             </label>
             <input
               id="email"
+              name="email"
               type="email"
               autoComplete="email"
               required
@@ -101,11 +127,22 @@ export default function LoginPage() {
 
         <p className="text-center text-body-sm text-muted-foreground mt-6">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-primary font-medium hover:underline">
+          <Link
+            href={next !== "/" ? `/register?next=${encodeURIComponent(next)}` : "/register"}
+            className="text-primary font-medium hover:underline"
+          >
             Create one
           </Link>
         </p>
       </Container>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="py-16 sm:py-20" />}>
+      <LoginForm />
+    </Suspense>
   );
 }

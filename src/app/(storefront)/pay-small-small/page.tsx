@@ -8,36 +8,40 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Pay Small Small — OCare Phinas",
-  description: "Save a little daily and own quality electronics. Join a group or start your own solo plan — no interest, no stress.",
+  description: "Pick any item and pay for it your way — daily, weekly or monthly, at your own budget. Start a flexible solo plan, or join a ₦1,000/day group. No interest, no stress.",
 };
 
 const HOW_IT_WORKS = [
-  { step: "1", title: "Choose your path", body: "Join a group with up to 10 members, or start your own solo plan." },
-  { step: "2", title: "Pay ₦1,000 daily", body: "Transfer the daily amount to our bank account and send your screenshot on WhatsApp." },
-  { step: "3", title: "We confirm & track", body: "Our team confirms your payment and updates your progress ledger, usually within 2 hours." },
-  { step: "4", title: "Reach your target", body: "After 50 days (₦50,000 total), pick your item and we arrange fulfilment and delivery." },
+  { step: "1", title: "Pick your item", body: "Choose anything you want — from a ₦12,000 fan to a ₦350,000 freezer. No price cap." },
+  { step: "2", title: "Set your plan", body: "Decide how often you pay — daily, weekly or monthly — and how much per payment. It's your budget." },
+  { step: "3", title: "Pay & we track", body: "Transfer each payment to our bank and send your screenshot on WhatsApp. We confirm and update your ledger." },
+  { step: "4", title: "Halfway? We deliver", body: "Once you've paid 50%, we deliver your item — then you finish the balance at your own pace." },
 ];
 
 const FAQS = [
   {
-    q: "What happens if I miss a day?",
-    a: "Missing a day just pauses your progress — there are no penalties or late fees. Simply continue paying when you can. We encourage consistency, but life happens.",
+    q: "How much do I have to pay, and how often?",
+    a: "On a solo plan, that's entirely up to you. Pick any item, then choose to pay daily, weekly or monthly — and set the amount that fits your budget. There's no fixed daily figure and no price cap.",
+  },
+  {
+    q: "When do I get my item?",
+    a: "Once you've paid up to half (50%) of the item's price, we deliver it to you. You then continue paying the remaining balance at your own pace — just like CDcare.",
+  },
+  {
+    q: "What happens if I miss a payment?",
+    a: "Missing a payment just pauses your progress — there are no penalties or late fees. Simply continue when you can. We encourage consistency, but life happens.",
   },
   {
     q: "How are payments confirmed?",
-    a: "Transfer the daily amount to our bank account, include your plan reference in the narration, then send your payment screenshot on WhatsApp. Our team confirms it and updates your ledger.",
+    a: "Transfer your payment to our bank account, include your plan reference in the narration, then send your screenshot on WhatsApp. Our team confirms it and updates your ledger.",
   },
   {
-    q: "Is joining mandatory to shop?",
-    a: "Absolutely not. Pay Small Small is completely optional. You can browse and buy normally without ever joining a plan.",
+    q: "What's the difference between a solo plan and a group plan?",
+    a: "A solo plan is the flexible option — any item, any amount, any frequency, just you. A group plan is a fixed savings circle: ₦1,000 every day with up to 10 members working toward a ₦50,000 target. Solo is the main option; the group is there if you prefer a set daily routine.",
   },
   {
-    q: "How do I pick my item at the end?",
-    a: "When your target is reached, your plan is marked complete and our team contacts you to arrange fulfilment — just like a normal order.",
-  },
-  {
-    q: "What's the difference between a group plan and a solo plan?",
-    a: "Group plans let you join with up to 9 other members — it's social motivation, though members don't chat or interact. Solo plans are entirely independent, just you and your savings goal.",
+    q: "Is this mandatory to shop?",
+    a: "Absolutely not. Pay Small Small is completely optional. You can browse and buy normally without ever starting a plan.",
   },
 ];
 
@@ -68,21 +72,21 @@ export default function PSSLandingPage() {
               easy way
             </span>
           </h1>
-          <p className="text-body-lg text-white/80 mb-10 max-w-[44ch] mx-auto">
-            Pay ₦1,000 daily for 50 days and claim a genuine gadget worth up to ₦50,000. Join a group or go solo — the choice is yours.
+          <p className="text-body-lg text-white/80 mb-10 max-w-[46ch] mx-auto">
+            Pick any item and pay for it your way — daily, weekly or monthly, at a budget you set. We deliver once you&apos;re halfway. No interest, no price cap.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/pay-small-small/join"
+              href="/pay-small-small/solo"
               className="inline-flex items-center justify-center gap-2 h-12 px-8 rounded-xl font-semibold text-body text-primary bg-white hover:bg-white/90 transition-colors"
             >
-              <Users className="size-5" /> Join a Group
+              <User className="size-5" /> Start a Solo Plan
             </Link>
             <Link
-              href="/pay-small-small/solo"
+              href="/pay-small-small/join"
               className="inline-flex items-center justify-center gap-2 h-12 px-8 rounded-xl font-semibold text-body text-white border border-white/30 bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-colors"
             >
-              <User className="size-5" /> Start a Solo Plan
+              <Users className="size-5" /> Join a Group
             </Link>
           </div>
         </Container>
@@ -119,47 +123,50 @@ export default function PSSLandingPage() {
             <h2 id="plans-heading" className="text-h1 font-bold">Choose your plan</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Group */}
-            <div className="rounded-2xl border-2 border-primary bg-card p-6 flex flex-col">
+            {/* Solo — primary / recommended */}
+            <div className="relative rounded-2xl border-2 border-primary bg-card p-6 flex flex-col">
+              <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-0.5 text-micro font-semibold text-white">
+                Recommended
+              </span>
               <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 mb-4">
-                <Users className="size-6 text-primary" />
+                <User className="size-6 text-primary" />
               </div>
-              <h3 className="text-h3 font-bold mb-2">Group Plan</h3>
+              <h3 className="text-h3 font-bold mb-2">Solo Plan</h3>
               <p className="text-body-sm text-muted-foreground mb-5 flex-1">
-                Join a group of up to 10 members. Each member saves independently — there&apos;s no chat or interaction, just shared motivation. Groups close automatically when full.
+                The flexible way to own anything. Pick any item at its real price, then pay daily, weekly or monthly — whatever amount fits your budget. We deliver once you reach the halfway mark.
               </p>
               <ul className="space-y-2 mb-6">
-                {["Up to 10 members per group", "Group closes when full", "Profile tag: Group #G-013", "No member interaction"].map((f) => (
+                {["Any item, any price — no ₦50k cap", "Pay daily, weekly or monthly", "Set your own amount", "Delivered at 50% paid"].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-body-sm">
                     <CheckCircle className="size-4 text-primary flex-shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
-              <Link href="/pay-small-small/join" className={cn(buttonVariants(), "w-full gap-2 justify-center")}>
-                <Users className="size-4" /> Join a Group
+              <Link href="/pay-small-small/solo" className={cn(buttonVariants(), "w-full gap-2 justify-center")}>
+                <User className="size-4" /> Start a Solo Plan
               </Link>
             </div>
 
-            {/* Solo */}
+            {/* Group — secondary */}
             <div className="rounded-2xl border border-border bg-card p-6 flex flex-col">
               <div className="flex size-12 items-center justify-center rounded-xl bg-accent/10 mb-4">
-                <User className="size-6 text-accent" />
+                <Users className="size-6 text-accent" />
               </div>
-              <h3 className="text-h3 font-bold mb-2">Solo Plan</h3>
+              <h3 className="text-h3 font-bold mb-2">Group Plan</h3>
               <p className="text-body-sm text-muted-foreground mb-5 flex-1">
-                Go at your own pace, entirely on your own. Pick a target item or value and save until you hit your goal — no group needed.
+                Prefer a fixed routine? Join a savings circle of up to 10 members, each paying ₦1,000 every day toward a ₦50,000 target. Each member saves independently — shared motivation, no chat.
               </p>
               <ul className="space-y-2 mb-6">
-                {["Just you, no group", "Pick your own target item", "Profile tag: Solo Plan", "Start anytime"].map((f) => (
+                {["Fixed ₦1,000 every day", "₦50,000 target in 50 days", "Up to 10 members per group", "Group closes when full"].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-body-sm">
                     <CheckCircle className="size-4 text-accent flex-shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
-              <Link href="/pay-small-small/solo" className={cn(buttonVariants({ variant: "outline" }), "w-full gap-2 justify-center")}>
-                <User className="size-4" /> Start a Solo Plan
+              <Link href="/pay-small-small/join" className={cn(buttonVariants({ variant: "outline" }), "w-full gap-2 justify-center")}>
+                <Users className="size-4" /> Join a Group
               </Link>
             </div>
           </div>
