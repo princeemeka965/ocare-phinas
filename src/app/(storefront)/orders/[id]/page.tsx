@@ -68,7 +68,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
   return (
     <div className="py-8 sm:py-12">
-      <Container className="max-w-3xl">
+      <Container>
         <Link href="/orders" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mb-6 gap-2")}>
           <ArrowLeft className="size-4" /> My Orders
         </Link>
@@ -94,7 +94,13 @@ export default async function OrderDetailPage({ params }: PageProps) {
                 const done = STATUS_ORDER.indexOf(step.key) <= statusIdx;
                 const current = step.key === order.status;
                 return (
-                  <div key={step.key} className="flex items-center flex-shrink-0">
+                  <div
+                    key={step.key}
+                    className={cn(
+                      "flex items-center",
+                      i < TIMELINE_STEPS.length - 1 ? "flex-1" : "flex-shrink-0",
+                    )}
+                  >
                     <div className="flex flex-col items-center gap-1.5">
                       <div
                         className={cn(
@@ -122,7 +128,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                     {i < TIMELINE_STEPS.length - 1 && (
                       <div
                         className={cn(
-                          "h-0.5 w-8 sm:w-12 mx-1 flex-shrink-0 transition-colors",
+                          "h-0.5 flex-1 min-w-[1.5rem] sm:min-w-[3rem] mx-1 transition-colors",
                           STATUS_ORDER.indexOf(TIMELINE_STEPS[i + 1].key) <= statusIdx
                             ? "bg-primary"
                             : "bg-border",

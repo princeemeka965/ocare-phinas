@@ -59,7 +59,7 @@ export default function RegisterPage() {
 
   return (
     <div className="py-12 sm:py-16">
-      <Container className="max-w-md">
+      <Container>
         <div className="text-center mb-8">
           <h1 className="text-h1 font-bold mb-2">Create your account</h1>
           <p className="text-body-sm text-muted-foreground">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Copy, MessageCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, Copy } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
@@ -27,7 +27,7 @@ export default async function PaymentInstructionsPage({ params }: PageProps) {
 
   return (
     <div className="py-8 sm:py-12">
-      <Container className="max-w-lg">
+      <Container className="max-w-lg lg:max-w-2xl">
         <Link href={`/orders/${id}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mb-6 gap-2")}>
           <ArrowLeft className="size-4" /> Back to order
         </Link>
@@ -77,25 +77,17 @@ export default async function PaymentInstructionsPage({ params }: PageProps) {
           href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2.5 w-full rounded-xl bg-[#25D366] hover:bg-[#1eb85a] text-white font-semibold text-body py-4 transition-colors mb-3"
+          className="mx-auto flex w-full max-w-md flex-col items-center justify-center rounded-xl bg-[#25D366] hover:bg-[#1eb85a] text-white font-semibold text-body-sm sm:text-body px-5 sm:px-6 py-3.5 transition-colors mb-3 text-center"
         >
-          <MessageCircle className="size-5" />
-          I&apos;ve sent the payment — send screenshot on WhatsApp
-          <ExternalLink className="size-4 opacity-70" />
+          <span>I&apos;ve made the bank transfer</span>
+          <span className="text-caption font-normal opacity-90">
+            Tap to send your payment receipt on WhatsApp
+          </span>
         </a>
 
         <p className="text-center text-caption text-muted-foreground mb-6">
           This opens WhatsApp with your order details pre-filled. Just attach your transfer screenshot and send.
         </p>
-
-        <div className="text-center">
-          <Link
-            href={`/orders/${id}/submit-payment`}
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
-          >
-            Prefer to submit proof here instead
-          </Link>
-        </div>
 
         <div className="mt-8 rounded-xl border border-border bg-muted/50 p-4">
           <p className="text-caption text-muted-foreground text-center">

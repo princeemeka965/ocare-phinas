@@ -16,3 +16,16 @@ export function isMinimalChrome(pathname: string): boolean {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }
+
+/**
+ * Routes where the marketing footer is hidden for signed-in users — focused
+ * account / transactional flows (cart, checkout, and order tracking + payment)
+ * where the footer is noise. Covers /orders, /orders/[id] and the payment page.
+ */
+export const AUTHED_FOOTERLESS_ROUTES = ["/cart", "/checkout", "/orders"];
+
+export function hidesFooterWhenAuthed(pathname: string): boolean {
+  return AUTHED_FOOTERLESS_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+}

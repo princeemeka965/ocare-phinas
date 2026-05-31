@@ -70,7 +70,7 @@ export default function OrdersPage() {
 
   return (
     <div className="py-8 sm:py-12">
-      <Container className="max-w-3xl">
+      <Container>
         <h1 className="text-h1 font-bold mb-8">My Orders</h1>
 
         <div className="space-y-4">
