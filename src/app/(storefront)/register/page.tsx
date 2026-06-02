@@ -75,6 +75,7 @@ function RegisterForm() {
   return (
     <div className="py-12 sm:py-16">
       <Container>
+        <div className="mx-auto w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-h1 font-bold mb-2">Create your account</h1>
           <p className="text-body-sm text-muted-foreground">
@@ -125,7 +126,7 @@ function RegisterForm() {
               <div>
                 <p className="text-body-sm font-medium">Join a Pay Small Small plan (optional)</p>
                 <p className="text-caption text-muted-foreground mt-0.5">
-                  Pick any item and pay for it your way — daily, weekly or monthly, at your own budget. You can always start later — shopping works normally without a plan.
+                  Pick any item and pay ₦1,000 a day per slot, delivered at 50% on solo plans. You can always start later — shopping works normally without a plan.
                 </p>
               </div>
             </label>
@@ -153,6 +154,7 @@ function RegisterForm() {
             Log in
           </Link>
         </p>
+        </div>
       </Container>
     </div>
   );

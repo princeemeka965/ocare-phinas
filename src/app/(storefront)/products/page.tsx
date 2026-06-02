@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpDown, X, Check, Tag } from "lucide-react";
+import { ArrowUpDown, X, Check, Tag, ChevronDown } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
@@ -199,9 +199,65 @@ export default async function ProductsPage({ searchParams }: PageProps) {
               </div>
             </div>
 
-            {/* Mobile filters */}
-            <div className="lg:hidden mb-6 rounded-2xl border border-border p-4">
-              <FilterPanel filters={filters} />
+            {/* Mobile filters — collapsible dropdowns, none open by default */}
+            <div className="lg:hidden mb-6 space-y-2">
+              <MobileFilterGroup
+                title="Category"
+                selected={filters.category ? CATEGORY_LABELS[filters.category] ?? filters.category : undefined}
+              >
+                {CATEGORIES.map((c) => (
+                  <FilterLink
+                    key={c.slug}
+                    label={c.label}
+                    active={filters.category === c.slug}
+                    href={buildHref(filters, {
+                      category: filters.category === c.slug ? undefined : c.slug,
+                    })}
+                  />
+                ))}
+              </MobileFilterGroup>
+
+              <MobileFilterGroup title="Brand" selected={filters.brand}>
+                {BRANDS.map((b) => (
+                  <FilterLink
+                    key={b}
+                    label={b}
+                    active={filters.brand === b}
+                    href={buildHref(filters, {
+                      brand: filters.brand === b ? undefined : b,
+                    })}
+                  />
+                ))}
+              </MobileFilterGroup>
+
+              <MobileFilterGroup
+                title="Condition"
+                selected={filters.condition ? (filters.condition === "new" ? "New" : "Pre-owned") : undefined}
+              >
+                {[
+                  { value: "new", label: "New" },
+                  { value: "pre_owned", label: "Pre-owned (Tokunbo / UK Used)" },
+                ].map((opt) => (
+                  <FilterLink
+                    key={opt.value}
+                    label={opt.label}
+                    active={filters.condition === opt.value}
+                    href={buildHref(filters, {
+                      condition: filters.condition === opt.value ? undefined : opt.value,
+                    })}
+                  />
+                ))}
+              </MobileFilterGroup>
+
+              <div className="rounded-xl border border-border bg-card px-2 py-1.5">
+                <FilterLink
+                  label="In stock only"
+                  active={filters.instock === "1"}
+                  href={buildHref(filters, {
+                    instock: filters.instock === "1" ? undefined : "1",
+                  })}
+                />
+              </div>
             </div>
 
             {/* Grid */}
@@ -301,6 +357,41 @@ function FilterGroup({ title, children }: { title: string; children: ReactNode }
       <h3 className="text-body-sm font-semibold mb-3">{title}</h3>
       <div className="space-y-0.5">{children}</div>
     </div>
+  );
+}
+
+/* Mobile collapsible filter. `name` makes the three groups mutually exclusive —
+   opening one closes the others. Closed by default, so no content shows until tapped. */
+function MobileFilterGroup({
+  title,
+  selected,
+  children,
+}: {
+  title: string;
+  selected?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      name="mobile-filter"
+      className="group rounded-xl border border-border bg-card overflow-hidden"
+    >
+      <summary className="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2 text-body-sm font-semibold">
+          {title}
+          {selected && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-micro font-medium text-primary">
+              {selected}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          className="size-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+          aria-hidden
+        />
+      </summary>
+      <div className="border-t border-border px-2 py-2 space-y-0.5">{children}</div>
+    </details>
   );
 }
 

@@ -12,6 +12,9 @@ import {
   ShieldCheck,
   RefreshCw,
   Check,
+  User,
+  Users,
+  Truck,
 } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
@@ -22,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import { toast } from "@/store/toastStore";
 import { ProductCard } from "@/components/storefront/product-card";
+import { planMath, isGroupEligible, groupSlotsForPrice, dailyForSlots, naira } from "@/lib/pay-small-small";
 
 /* ------------------------------------------------------------------ */
 /* Mock product data — replace with server fetch in Phase 3            */
@@ -73,11 +77,6 @@ const RELATED = [
   { id: "5", name: 'MacBook Air 13" M3 256GB', slug: "macbook-air-m3", brand: "Apple", price: 119990, stockQuantity: 3, stockLabel: "Low stock" as const, categorySlug: "laptops", condition: "new" as const, image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=400&fit=crop&q=85" },
 ];
 
-/* Solo plans have no price cap — every in-catalogue item can be paid small small.
-   This "from" figure is just an illustrative low daily amount (~6-month horizon);
-   the customer sets their own amount and frequency in the plan builder. */
-const PSS_SAMPLE_HORIZON_DAYS = 180;
-
 function formatPrice(n: number) {
   return `₦${n.toLocaleString("en-NG")}`;
 }
@@ -90,9 +89,17 @@ export default function ProductDetailPage() {
   const product = MOCK_PRODUCT;
   const outOfStock = product.stockQuantity === 0;
   const lowStock = product.stockQuantity > 0 && product.stockQuantity <= 5;
-  const isPSSEligible = true; // any item qualifies — solo plans have no cap
-  const perDay = Math.ceil(product.price / PSS_SAMPLE_HORIZON_DAYS / 100) * 100;
   const imageCount = product.images.length;
+
+  /* Pay Small Small — slot engine (locked rules in src/lib/pay-small-small.ts).
+     Solo & Outright have no price cap; Group only for items ≤ ₦100,000. */
+  const pss = planMath(product.price);
+  const groupEligible = isGroupEligible(product.price);
+  const groupSlots = groupSlotsForPrice(product.price);
+  const groupDaily = dailyForSlots(groupSlots);
+
+  /* Deep-link query carrying the chosen item into the plan builders. */
+  const itemQuery = `item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(product.images[0])}`;
 
   function handleAddToCart() {
     for (let i = 0; i < qty; i++) {
@@ -231,13 +238,12 @@ export default function ProductDetailPage() {
                 {formatPrice(product.price)}
               </span>
 
-              {isPSSEligible && (
-                <p className="text-body-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                  <Wallet className="size-4 text-accent-foreground" />
-                  Or pay from{" "}
-                  <strong className="text-foreground">{formatPrice(perDay)}/day</strong> — daily, weekly or monthly with Pay Small Small
-                </p>
-              )}
+              <p className="text-body-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                <Wallet className="size-4 text-accent-foreground" />
+                Or pay{" "}
+                <strong className="text-foreground">{naira(pss.daily)}/day</strong> with Pay Small Small
+                {" "}({pss.slots} slot{pss.slots !== 1 ? "s" : ""})
+              </p>
 
               {lowStock && (
                 <p className="text-caption font-medium text-foreground flex items-center gap-1.5">
@@ -262,55 +268,96 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {/* Quantity + Add to cart */}
+            {/* Choose how to pay — Outright / Solo / Group (payment-flow §2) */}
             <div className="space-y-3 pt-1">
-              <div className="flex items-center gap-4">
-                <span className="text-body-sm font-medium">Quantity</span>
-                <div className="flex items-center border border-border rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setQty((q) => Math.max(1, q - 1))}
-                    className="flex size-10 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
-                    aria-label="Decrease quantity"
-                    disabled={qty <= 1}
-                  >
-                    <Minus className="size-4" />
-                  </button>
-                  <span className="w-12 text-center text-body font-semibold">{qty}</span>
-                  <button
-                    onClick={() => setQty((q) => Math.min(product.stockQuantity, q + 1))}
-                    className="flex size-10 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
-                    aria-label="Increase quantity"
-                    disabled={qty >= product.stockQuantity}
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                </div>
-              </div>
+              <h2 className="text-body-sm font-semibold">Choose how to pay</h2>
 
-              <div className="flex flex-col sm:flex-row gap-3">
+              {/* Outright Purchase */}
+              <div className="rounded-2xl border-2 border-primary/40 bg-card p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
+                      <ShoppingCart className="size-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-body-sm font-semibold">Outright Purchase</p>
+                      <p className="text-caption text-muted-foreground">Pay {formatPrice(product.price)} and get it now</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center border border-border rounded-lg overflow-hidden flex-shrink-0">
+                    <button
+                      onClick={() => setQty((q) => Math.max(1, q - 1))}
+                      className="flex size-9 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
+                      aria-label="Decrease quantity"
+                      disabled={qty <= 1}
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                    <span className="w-10 text-center text-body-sm font-semibold">{qty}</span>
+                    <button
+                      onClick={() => setQty((q) => Math.min(product.stockQuantity, q + 1))}
+                      className="flex size-9 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
+                      aria-label="Increase quantity"
+                      disabled={qty >= product.stockQuantity}
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                </div>
                 <Button
                   size="lg"
-                  className="flex-1 gap-2"
+                  className="w-full gap-2"
                   onClick={handleAddToCart}
                   disabled={outOfStock}
                 >
                   <ShoppingCart className="size-5" />
                   {outOfStock ? "Out of stock" : "Add to cart"}
                 </Button>
-
-                {isPSSEligible && (
-                  <Link
-                    href={`/pay-small-small/solo?item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(product.images[0])}`}
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "lg" }),
-                      "flex-1 gap-2",
-                    )}
-                  >
-                    <Wallet className="size-5" />
-                    Pay Small Small
-                  </Link>
-                )}
               </div>
+
+              {/* Solo Plan */}
+              <Link
+                href={`/pay-small-small/solo?${itemQuery}`}
+                className="block rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-sm"
+              >
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10">
+                    <User className="size-4 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-body-sm font-semibold">Solo Plan</p>
+                    <p className="text-caption text-muted-foreground">
+                      {naira(pss.daily)}/day · {pss.slots} slot{pss.slots !== 1 ? "s" : ""} · delivered at 50%
+                    </p>
+                  </div>
+                  <ChevronRight className="size-4 text-muted-foreground flex-shrink-0" />
+                </div>
+                <p className="text-caption text-muted-foreground flex items-center gap-1.5 pl-11">
+                  <Truck className="size-3.5 text-primary" />
+                  Get it in ~{pss.daysToDelivery} days, then finish the balance
+                </p>
+              </Link>
+
+              {/* Group Plan — eligible only for items ≤ ₦100,000 */}
+              {groupEligible && (
+                <Link
+                  href={`/pay-small-small/join?${itemQuery}`}
+                  className="block rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-sm"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10">
+                      <Users className="size-4 text-accent" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-body-sm font-semibold">Group Plan</p>
+                      <p className="text-caption text-muted-foreground">
+                        {naira(groupDaily)}/day · {groupSlots} slot{groupSlots !== 1 ? "s" : ""} · delivered by group position
+                      </p>
+                    </div>
+                    <ChevronRight className="size-4 text-muted-foreground flex-shrink-0" />
+                  </div>
+                </Link>
+              )}
             </div>
 
             {/* Payment note */}
@@ -371,7 +418,7 @@ export default function ProductDetailPage() {
         {RELATED.length > 0 && (
           <div className="mt-16">
             <h2 className="text-h2 font-bold mb-6">You may also like</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {RELATED.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

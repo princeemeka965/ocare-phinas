@@ -279,8 +279,8 @@ function PaySmallSmallPromo() {
               </span>
             </h2>
             <p className="text-body-lg text-white/80 mb-8 max-w-[42ch] mx-auto lg:mx-0">
-              Pick any item and pay for it your way — daily, weekly or monthly, at a budget you set.
-              We deliver once you&apos;re halfway. No interest, no price cap.
+              Pick any item and pay ₦1,000 a day per slot. Solo plans deliver at 50% with no price cap;
+              groups cover items up to ₦100,000. No interest, no withdrawals.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link

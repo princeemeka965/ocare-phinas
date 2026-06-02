@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   Users,
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   Banknote,
   MessageCircle,
   Target,
+  AlertTriangle,
 } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
@@ -22,42 +23,63 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import {
+  SLOT_DAILY,
+  CYCLE_DAYS,
+  SLOT_CYCLE_VALUE,
+  GROUP_PRICE_CAP,
+  GROUP_MAX_SLOTS_PER_CUSTOMER,
+  isGroupEligible,
+  groupSlotsForPrice,
+  dailyForSlots,
+  naira,
+} from "@/lib/pay-small-small";
 
 interface Group {
   id: string;
   reference: string;
-  members: number;
-  capacity: number;
+  slotsFilled: number;
+  totalSlots: number;
   startDate: string;
-  targetValue: number;
-  dailyAmount: number;
-  duration: number;
   status: "open" | "full" | "completed";
 }
 
 /* Mock groups — mirrors the list in ../page.tsx. Replace with DB fetch in Phase 3. */
 const MOCK_GROUPS: Group[] = [
-  { id: "1", reference: "G-017", members: 3, capacity: 10, startDate: "2026-06-01", targetValue: 50000, dailyAmount: 1000, duration: 50, status: "open" },
-  { id: "2", reference: "G-016", members: 8, capacity: 10, startDate: "2026-05-20", targetValue: 50000, dailyAmount: 1000, duration: 50, status: "open" },
-  { id: "3", reference: "G-015", members: 10, capacity: 10, startDate: "2026-05-01", targetValue: 50000, dailyAmount: 1000, duration: 50, status: "full" },
-  { id: "4", reference: "G-014", members: 10, capacity: 10, startDate: "2026-04-01", targetValue: 50000, dailyAmount: 1000, duration: 50, status: "completed" },
+  { id: "1", reference: "G-017", slotsFilled: 3, totalSlots: 10, startDate: "2026-06-01", status: "open" },
+  { id: "2", reference: "G-016", slotsFilled: 8, totalSlots: 10, startDate: "2026-05-20", status: "open" },
+  { id: "3", reference: "G-015", slotsFilled: 10, totalSlots: 10, startDate: "2026-05-01", status: "full" },
+  { id: "4", reference: "G-014", slotsFilled: 10, totalSlots: 10, startDate: "2026-04-01", status: "completed" },
 ];
 
-const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
 
 const HOW_IT_WORKS = [
-  { icon: Banknote, title: "Pay ₦1,000 daily", body: "Transfer the daily amount to our bank account." },
+  { icon: Banknote, title: "Pay daily per slot", body: `Transfer ${naira(SLOT_DAILY)} per slot each day to our bank account.` },
   { icon: MessageCircle, title: "Send your screenshot", body: "Share it on WhatsApp so we can confirm and log it." },
-  { icon: Target, title: "Reach ₦50,000", body: "After 50 days your plan completes and we arrange your item." },
+  { icon: Target, title: "Receive by position", body: "Items are delivered in group position order as funds build." },
 ];
 
-export default function JoinGroupConfirmPage() {
+function JoinGroupConfirmInner() {
   const user = useUserStore((s) => s.user);
   const params = useParams();
+  const search = useSearchParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const group = MOCK_GROUPS.find((g) => g.id === id);
+
+  /* Optional deep-linked target item from a product page. */
+  const itemName = search.get("name");
+  const itemPrice = Number(search.get("price"));
+  const itemImage = search.get("image");
+  const hasItem = Boolean(itemName) && itemPrice > 0;
+
+  /* Slots: a prefilled item fixes the slot count (1 or 2); otherwise the
+     customer chooses, capped at the per-customer group maximum. */
+  const itemSlots = hasItem ? groupSlotsForPrice(itemPrice) : 1;
+  const [slots, setSlots] = useState<number>(itemSlots);
+  const effectiveSlots = hasItem ? itemSlots : slots;
+  const daily = dailyForSlots(effectiveSlots);
 
   const [step, setStep] = useState<"confirm" | "done">("confirm");
 
@@ -93,8 +115,39 @@ export default function JoinGroupConfirmPage() {
     );
   }
 
-  const slotsLeft = group.capacity - group.members;
+  /* ----------------- ITEM ABOVE GROUP CAP (ineligible) -------------- */
+  if (hasItem && !isGroupEligible(itemPrice)) {
+    return (
+      <div className="py-8 sm:py-12">
+        <Container className="max-w-2xl">
+          <Link href="/pay-small-small/join" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mb-6 gap-2")}>
+            <ArrowLeft className="size-4" /> Back to groups
+          </Link>
+          <div className="rounded-2xl border border-warning/30 bg-warning/5 p-8 text-center">
+            <div className="flex size-14 items-center justify-center rounded-full bg-warning/15 mx-auto mb-4">
+              <AlertTriangle className="size-7 text-warning" />
+            </div>
+            <h1 className="text-h2 font-bold mb-2">This item needs a solo plan</h1>
+            <p className="text-body-sm text-muted-foreground mb-6 max-w-[44ch] mx-auto">
+              {itemName} costs {naira(itemPrice)}. Group plans only cover items up to {naira(GROUP_PRICE_CAP)}.
+              A solo plan has no price cap — start one and pay {naira(SLOT_DAILY)} per slot per day.
+            </p>
+            <Link
+              href={`/pay-small-small/solo?${search.toString()}`}
+              className={cn(buttonVariants(), "gap-2")}
+            >
+              Start a solo plan instead <ArrowRight className="size-4" />
+            </Link>
+          </div>
+        </Container>
+      </div>
+    );
+  }
+
+  const slotsLeft = group.totalSlots - group.slotsFilled;
   const isOpen = group.status === "open";
+  const maxSelectable = Math.min(GROUP_MAX_SLOTS_PER_CUSTOMER, slotsLeft);
+  const firstPosition = group.slotsFilled + 1;
 
   /* ------------------------- CLOSED (full/done) --------------------- */
   if (!isOpen) {
@@ -113,7 +166,7 @@ export default function JoinGroupConfirmPage() {
             </h1>
             <p className="text-body-sm text-muted-foreground mb-6 max-w-[42ch] mx-auto">
               {group.status === "full"
-                ? "All 10 slots in this group have been taken. Try another open group, or start a solo plan with no waiting."
+                ? "Every slot in this group has been taken. Try another open group, or start a solo plan with no waiting."
                 : "This group has finished its savings cycle. Join an open group or start your own solo plan."}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -141,8 +194,9 @@ export default function JoinGroupConfirmPage() {
             </div>
             <h1 className="text-h2 font-bold mb-2">You&apos;ve joined {group.reference}!</h1>
             <p className="text-body-sm text-muted-foreground mb-8">
-              You&apos;re member {group.members + 1} of {group.capacity}. Pay {naira(group.dailyAmount)} daily and
-              track your progress on the My Plan page.
+              You hold {effectiveSlots} slot{effectiveSlots !== 1 ? "s" : ""} (position{effectiveSlots !== 1 ? "s" : ""}{" "}
+              {effectiveSlots === 1 ? firstPosition : `${firstPosition}–${firstPosition + effectiveSlots - 1}`}).
+              Pay {naira(daily)} daily and track progress on the My Plan page.
             </p>
             <Link href="/pay-small-small/my-plan" className={cn(buttonVariants({ size: "lg" }), "w-full gap-2 justify-center")}>
               Go to My Plan <ArrowRight className="size-4" />
@@ -168,7 +222,7 @@ export default function JoinGroupConfirmPage() {
           <h1 className="text-h1 font-bold">Join {group.reference}</h1>
         </div>
         <p className="text-body-sm text-muted-foreground mb-8">
-          Review the group and your commitment before you join. You can only have one active plan at a time.
+          Take 1 or 2 slots and confirm your daily commitment. Each slot is {naira(SLOT_DAILY)}/day.
         </p>
 
         {/* Group summary */}
@@ -180,35 +234,89 @@ export default function JoinGroupConfirmPage() {
 
           <div className="flex items-center gap-4 text-body-sm text-muted-foreground flex-wrap mb-3">
             <span className="flex items-center gap-1.5">
-              <Users className="size-3.5" /> {group.members}/{group.capacity} members
+              <Users className="size-3.5" /> {group.slotsFilled}/{group.totalSlots} slots
             </span>
             <span className="flex items-center gap-1.5">
               <CalendarDays className="size-3.5" /> Starts {formatDate(group.startDate)}
             </span>
           </div>
 
-          {/* Member slots bar */}
+          {/* Slot fill bar */}
           <div className="flex gap-1 mb-1.5">
-            {Array.from({ length: group.capacity }).map((_, i) => (
+            {Array.from({ length: group.totalSlots }).map((_, i) => (
               <div
                 key={i}
-                className={cn("h-2 flex-1 rounded-full", i < group.members ? "bg-primary" : "bg-muted")}
+                className={cn(
+                  "h-2 flex-1 rounded-full",
+                  i < group.slotsFilled
+                    ? "bg-primary"
+                    : i < group.slotsFilled + effectiveSlots
+                    ? "bg-accent"
+                    : "bg-muted",
+                )}
               />
             ))}
           </div>
           <p className="text-caption text-primary font-medium">
-            {slotsLeft} slot{slotsLeft !== 1 ? "s" : ""} remaining — you&apos;d be member {group.members + 1}
+            {slotsLeft} slot{slotsLeft !== 1 ? "s" : ""} remaining — you&apos;d take position
+            {effectiveSlots !== 1 ? "s" : ""}{" "}
+            {effectiveSlots === 1 ? firstPosition : `${firstPosition}–${firstPosition + effectiveSlots - 1}`}
           </p>
         </div>
+
+        {/* Target item (if deep-linked) */}
+        {hasItem && (
+          <div className="rounded-2xl border border-border bg-card p-5 mb-5">
+            <div className="flex items-center gap-4">
+              <div className="size-14 rounded-xl overflow-hidden border border-border flex-shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={itemImage || ""} alt={itemName || ""} className="h-full w-full object-cover" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-caption font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Saving toward</p>
+                <p className="text-body-sm font-semibold line-clamp-2">{itemName}</p>
+                <p className="text-body font-bold text-primary">{naira(itemPrice)} · {itemSlots} slot{itemSlots !== 1 ? "s" : ""}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Slot picker (only when not fixed by a target item) */}
+        {!hasItem && (
+          <div className="mb-5">
+            <h2 className="text-body font-semibold mb-3">How many slots?</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: Math.max(1, maxSelectable) }).map((_, i) => {
+                const value = i + 1;
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setSlots(value)}
+                    className={cn(
+                      "rounded-2xl border p-4 text-left transition-all duration-200",
+                      slots === value
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                        : "border-border bg-card hover:border-primary/40",
+                    )}
+                  >
+                    <p className="text-body font-bold">{value} slot{value !== 1 ? "s" : ""}</p>
+                    <p className="text-caption text-muted-foreground">{naira(dailyForSlots(value))}/day</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Your commitment */}
         <div className="rounded-2xl border border-border bg-muted/50 p-5 mb-5">
           <h2 className="text-body font-semibold mb-3">Your commitment</h2>
           <div className="space-y-2 text-body-sm">
             {[
-              ["Daily payment", naira(group.dailyAmount)],
-              ["Duration", `${group.duration} days`],
-              ["Target total", naira(group.targetValue)],
+              ["Slots", `${effectiveSlots}`],
+              ["Daily payment", `${naira(daily)}/day`],
+              ["Cycle", `${CYCLE_DAYS} days`],
+              ["Value per slot/cycle", naira(SLOT_CYCLE_VALUE)],
               ["Plan type", `Group ${group.reference}`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">
@@ -234,8 +342,9 @@ export default function JoinGroupConfirmPage() {
         </div>
 
         <p className="text-caption text-muted-foreground mb-5">
-          By joining you agree to save {naira(group.dailyAmount)}/day toward the {naira(group.targetValue)} target.
-          Missing a day just pauses your progress — there are no penalties. You can leave by contacting us on WhatsApp.
+          By joining you agree to pay {naira(daily)}/day (strictly the daily amount — no paying ahead). Missing a day
+          just pauses your progress. When you complete a cycle you&apos;ll choose to continue or convert to a product —
+          money is never withdrawn as cash.
         </p>
 
         <Button size="lg" className="w-full gap-2" onClick={() => setStep("done")}>
@@ -243,5 +352,13 @@ export default function JoinGroupConfirmPage() {
         </Button>
       </Container>
     </div>
+  );
+}
+
+export default function JoinGroupConfirmPage() {
+  return (
+    <Suspense fallback={<div className="py-20" />}>
+      <JoinGroupConfirmInner />
+    </Suspense>
   );
 }

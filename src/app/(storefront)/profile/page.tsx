@@ -18,9 +18,9 @@ const MOCK_PROFILE = {
   plan: {
     type: "solo" as "group" | "solo",
     reference: "SOLO-0042",
-    frequency: "weekly" as "daily" | "weekly" | "monthly",
-    paymentsMade: 9,
-    amountSaved: 90000,
+    daily: 7000,
+    paymentsMade: 28,
+    amountSaved: 196000,
     amountTarget: 350000,
   },
 };
@@ -86,8 +86,8 @@ export default function ProfilePage() {
                     {profile.plan.type === "group" ? `Group #${profile.plan.reference}` : "Solo Plan"}
                   </p>
                 </div>
-                <p className="text-caption text-muted-foreground capitalize mb-3">
-                  {profile.plan.paymentsMade} {profile.plan.frequency} payments · ₦{profile.plan.amountSaved.toLocaleString("en-NG")} of ₦{profile.plan.amountTarget.toLocaleString("en-NG")}
+                <p className="text-caption text-muted-foreground mb-3">
+                  {profile.plan.paymentsMade} payments · ₦{profile.plan.daily.toLocaleString("en-NG")}/day · ₦{profile.plan.amountSaved.toLocaleString("en-NG")} of ₦{profile.plan.amountTarget.toLocaleString("en-NG")}
                 </p>
                 <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-4">
                   <div

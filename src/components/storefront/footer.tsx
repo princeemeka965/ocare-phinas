@@ -82,7 +82,7 @@ export function StorefrontFooter() {
           <div>
             <h2 className="text-body-sm font-semibold mb-3">Pay Small Small</h2>
             <p className="text-caption text-muted-foreground mb-3">
-              Own any gadget by paying at your own pace — daily, weekly or monthly. No interest, no stress.
+              Own any gadget by paying ₦1,000 a day per slot. Delivered at 50% on solo plans. No interest, no withdrawals.
             </p>
             <ul className="space-y-2">
               {pssLinks.map((link) => (

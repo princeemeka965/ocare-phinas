@@ -12,6 +12,10 @@ import {
   Landmark,
   ShieldCheck,
   Lock,
+  Wallet,
+  User,
+  Users,
+  CalendarClock,
 } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
@@ -28,6 +32,16 @@ import { useCartStore, cartItemCount, cartSubtotal } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { toast } from "@/store/toastStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import {
+  soloPlanMath,
+  dailyForPrice,
+  dailyForSlots,
+  groupSlotsForPrice,
+  isGroupEligible,
+  GROUP_PRICE_CAP,
+  SOLO_MIN_DAILY,
+  naira,
+} from "@/lib/pay-small-small";
 
 /* Nigerian states — delivery fees are mocked here; in Phase 3 they come from Settings (B10). */
 const NG_STATES = [
@@ -49,6 +63,8 @@ function deliveryFeeFor(state: string, subtotal: number) {
   return 5_000;
 }
 
+type PayPlan = "outright" | "solo" | "group";
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -57,6 +73,8 @@ export default function CheckoutPage() {
   const clearCart = useCartStore((s) => s.clearCart);
   const user = useUserStore((s) => s.user);
 
+  const [plan, setPlan] = useState<PayPlan>("outright");
+  const [soloDaily, setSoloDaily] = useState("");
   const [method, setMethod] = useState<"delivery" | "pickup">("delivery");
   const [state, setState] = useState("");
   const [loading, setLoading] = useState(false);
@@ -105,6 +123,32 @@ export default function CheckoutPage() {
   const deliveryFee = isDelivery ? deliveryFeeFor(state, subtotal) : 0;
   const total = subtotal + (deliveryFee ?? 0);
 
+  /* ----------------------- Plan derivations ----------------------- */
+  /* Solo — any daily amount the customer chooses (no slot lock). */
+  const soloDailyNum = Number(soloDaily);
+  const soloValid = soloDailyNum >= SOLO_MIN_DAILY && soloDailyNum <= subtotal;
+  const soloMath =
+    plan === "solo" && soloDailyNum > 0 ? soloPlanMath(subtotal, soloDailyNum) : null;
+
+  /* Group — shared slot pool; only for carts worth ₦100,000 or less. */
+  const groupEligible = isGroupEligible(subtotal);
+  const groupSlots = groupSlotsForPrice(subtotal);
+  const groupDaily = dailyForSlots(groupSlots);
+
+  /* Pick a payment plan, seeding the solo daily with the slot suggestion. */
+  function choosePlan(next: PayPlan) {
+    setPlan(next);
+    if (next === "solo" && !soloDaily) setSoloDaily(String(dailyForPrice(subtotal)));
+  }
+
+  const submitDisabled =
+    loading ||
+    (plan === "solo" && !soloValid) ||
+    (plan === "group" && !groupEligible);
+
+  const ctaText =
+    plan === "outright" ? "Place order" : plan === "solo" ? "Start solo plan" : "Start group plan";
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -126,6 +170,11 @@ export default function CheckoutPage() {
         next.address = "Enter your street address.";
     }
 
+    if (plan === "solo" && !soloValid)
+      next.soloDaily = `Enter a daily amount between ${naira(SOLO_MIN_DAILY)} and ${naira(subtotal)}.`;
+    if (plan === "group" && !groupEligible)
+      next.plan = `Group plans are only for carts of ${naira(GROUP_PRICE_CAP)} or less.`;
+
     if (Object.keys(next).length > 0) {
       setErrors(next);
       toast.error("Please fix the highlighted fields.");
@@ -135,9 +184,23 @@ export default function CheckoutPage() {
     setErrors({});
     setLoading(true);
 
+    await new Promise((r) => setTimeout(r, 900));
+
+    /* Pay Small Small plans don't pay now — they start a savings plan and pay daily.
+       Outright orders create a pending order awaiting bank transfer. (Phase 3: real APIs.) */
+    if (plan === "solo" || plan === "group") {
+      clearCart();
+      toast.success(
+        plan === "solo"
+          ? "Solo plan started — track your daily payments on My Plan."
+          : "Group plan started — track your slots on My Plan.",
+      );
+      router.push("/pay-small-small/my-plan");
+      return;
+    }
+
     /* Phase 3: POST /api/orders → returns reference + id. Stock is decremented only
        after an admin confirms the bank transfer, so we just create a pending order. */
-    await new Promise((r) => setTimeout(r, 900));
     const reference = `OCP-2026-${String(Math.floor(Math.random() * 90000) + 10000)}`;
 
     clearCart();
@@ -160,6 +223,135 @@ export default function CheckoutPage() {
         <form onSubmit={handleSubmit} noValidate className="flex flex-col lg:flex-row gap-8">
           {/* Left — details */}
           <div className="flex-1 space-y-6">
+            {/* How would you like to pay? */}
+            <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
+              <div>
+                <h2 className="text-h3 font-bold">How would you like to pay?</h2>
+                <p className="text-caption text-muted-foreground mt-0.5">
+                  Pay the full amount now, or spread it over time with Pay Small Small.
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-3">
+                <MethodTile
+                  active={plan === "outright"}
+                  icon={<Wallet className="size-5" />}
+                  title="Pay outright"
+                  desc="Pay the full amount now by bank transfer."
+                  onClick={() => choosePlan("outright")}
+                />
+                <MethodTile
+                  active={plan === "solo"}
+                  icon={<User className="size-5" />}
+                  title="Solo plan"
+                  desc="Save daily at your own pace. Delivered at 50%."
+                  onClick={() => choosePlan("solo")}
+                />
+                <MethodTile
+                  active={plan === "group"}
+                  icon={<Users className="size-5" />}
+                  title="Group plan"
+                  desc={
+                    groupEligible
+                      ? "Share a slot pool. Delivered in turn."
+                      : `Carts over ${naira(GROUP_PRICE_CAP)} aren't eligible.`
+                  }
+                  disabled={!groupEligible}
+                  onClick={() => choosePlan("group")}
+                />
+              </div>
+              {errors.plan && <p className="text-caption text-destructive">{errors.plan}</p>}
+            </section>
+
+            {/* Plan setup — shown right after the chooser, above delivery, for Pay Small Small */}
+            {plan === "solo" && (
+              <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
+                <h2 className="text-h3 font-bold">Your solo plan</h2>
+                <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4">
+                  <FormField
+                    label="Choose your daily payment"
+                    htmlFor="soloDaily"
+                    error={errors.soloDaily}
+                    hint={`Per day — minimum ${naira(SOLO_MIN_DAILY)}. You decide the pace.`}
+                  >
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-bold text-primary">₦</span>
+                      <Input
+                        id="soloDaily"
+                        name="soloDaily"
+                        type="number"
+                        inputMode="numeric"
+                        min={SOLO_MIN_DAILY}
+                        max={subtotal}
+                        step={100}
+                        value={soloDaily}
+                        onChange={(e) => setSoloDaily(e.target.value)}
+                        placeholder="1,000"
+                        className="pl-8 font-bold"
+                        aria-invalid={!!errors.soloDaily}
+                      />
+                    </div>
+                  </FormField>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {[1000, 2000, 5000, 10000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setSoloDaily(String(amt))}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-caption font-semibold transition-colors",
+                          soloDailyNum === amt
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/40",
+                        )}
+                      >
+                        {naira(amt)}/day
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {soloMath && soloValid && (
+                  <div className="flex items-start gap-2 rounded-xl bg-muted/50 border border-border p-3 text-caption">
+                    <Truck className="size-4 text-primary flex-shrink-0 mt-0.5" />
+                    <span className="text-muted-foreground">
+                      Pay {naira(soloMath.daily)} a day. We deliver once you&apos;ve paid{" "}
+                      <span className="font-semibold text-foreground">{naira(soloMath.deliveryTarget)}</span> (50%) —
+                      about <span className="font-semibold text-foreground">{soloMath.daysToDelivery} days</span> in —
+                      then you finish the balance over {soloMath.daysToComplete} days total.
+                    </span>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {plan === "group" && (
+              <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
+                <h2 className="text-h3 font-bold">Your group plan</h2>
+                <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                    <Users className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-body-sm font-semibold">
+                      {groupSlots} slot{groupSlots !== 1 ? "s" : ""} · {naira(groupDaily)}/day
+                    </p>
+                    <p className="text-caption text-muted-foreground mt-0.5">
+                      You join a shared slot pool at ₦1,000 per slot a day. Members are delivered in
+                      position order as the group&apos;s funds build. Group plans are for carts of{" "}
+                      {naira(GROUP_PRICE_CAP)} or less.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-xl bg-muted/50 border border-border p-3 text-caption">
+                  <CalendarClock className="size-4 text-primary flex-shrink-0 mt-0.5" />
+                  <span className="text-muted-foreground">
+                    We&apos;ll place you in the next open group and confirm your position on My Plan.
+                  </span>
+                </div>
+              </section>
+            )}
+
             {/* Contact */}
             <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
               <div>
@@ -208,6 +400,11 @@ export default function CheckoutPage() {
             {/* Delivery method */}
             <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
               <h2 className="text-h3 font-bold">Delivery method</h2>
+              {plan !== "outright" && (
+                <p className="text-caption text-muted-foreground -mt-2">
+                  Tell us where to deliver — we ship once your plan reaches its delivery point.
+                </p>
+              )}
 
               <div className="grid sm:grid-cols-2 gap-3">
                 <MethodTile
@@ -292,23 +489,27 @@ export default function CheckoutPage() {
               )}
             </section>
 
-            {/* Payment method */}
+            {/* Payment method (outright) + order note */}
             <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
-              <h2 className="text-h3 font-bold">Payment method</h2>
+              <h2 className="text-h3 font-bold">
+                {plan === "outright" ? "Payment method" : "Anything else?"}
+              </h2>
 
-              <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary flex-shrink-0">
-                  <Landmark className="size-5" />
+              {plan === "outright" && (
+                <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                    <Landmark className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-body-sm font-semibold">Bank transfer</p>
+                    <p className="text-caption text-muted-foreground mt-0.5">
+                      After you place your order we&apos;ll show our account details. Transfer the
+                      exact total, send your screenshot on WhatsApp, and we confirm it manually —
+                      usually within 2 hours on business days.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-body-sm font-semibold">Bank transfer</p>
-                  <p className="text-caption text-muted-foreground mt-0.5">
-                    After you place your order we&apos;ll show our account details. Transfer the
-                    exact total, send your screenshot on WhatsApp, and we confirm it manually —
-                    usually within 2 hours on business days.
-                  </p>
-                </div>
-              </div>
+              )}
 
               <FormField
                 label="Order note"
@@ -354,41 +555,74 @@ export default function CheckoutPage() {
 
               <hr className="border-border" />
 
-              <div className="space-y-2 text-body-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal ({count} items)</span>
-                  <span className="font-medium">₦{subtotal.toLocaleString("en-NG")}</span>
+              {plan === "outright" ? (
+                <div className="space-y-2 text-body-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal ({count} items)</span>
+                    <span className="font-medium">₦{subtotal.toLocaleString("en-NG")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Delivery fee</span>
+                    <span className={cn("font-medium", deliveryFee === 0 && "text-primary")}>
+                      {!isDelivery
+                        ? "Free (pickup)"
+                        : deliveryFee == null
+                          ? "Select state"
+                          : deliveryFee === 0
+                            ? "Free"
+                            : `₦${deliveryFee.toLocaleString("en-NG")}`}
+                    </span>
+                  </div>
+                  {isDelivery && subtotal < FREE_DELIVERY_THRESHOLD && (
+                    <p className="text-caption text-muted-foreground">
+                      Free delivery on orders over ₦{FREE_DELIVERY_THRESHOLD.toLocaleString("en-NG")}.
+                    </p>
+                  )}
+                  <hr className="border-border" />
+                  <div className="flex justify-between text-body font-bold">
+                    <span>Total</span>
+                    <span className="text-primary">₦{total.toLocaleString("en-NG")}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Delivery fee</span>
-                  <span className={cn("font-medium", deliveryFee === 0 && "text-primary")}>
-                    {!isDelivery
-                      ? "Free (pickup)"
-                      : deliveryFee == null
-                        ? "Select state"
-                        : deliveryFee === 0
-                          ? "Free"
-                          : `₦${deliveryFee.toLocaleString("en-NG")}`}
-                  </span>
-                </div>
-                {isDelivery && subtotal < FREE_DELIVERY_THRESHOLD && (
+              ) : (
+                <div className="space-y-2 text-body-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan value ({count} items)</span>
+                    <span className="font-medium">₦{subtotal.toLocaleString("en-NG")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan type</span>
+                    <span className="font-medium capitalize">{plan}</span>
+                  </div>
+                  <hr className="border-border" />
+                  <div className="flex justify-between text-body font-bold">
+                    <span>Pay today</span>
+                    <span className="text-primary">
+                      {plan === "solo"
+                        ? soloValid
+                          ? `${naira(soloMath!.daily)}/day`
+                          : "Set amount"
+                        : `${naira(groupDaily)}/day`}
+                    </span>
+                  </div>
                   <p className="text-caption text-muted-foreground">
-                    Free delivery on orders over ₦{FREE_DELIVERY_THRESHOLD.toLocaleString("en-NG")}.
+                    No payment is taken now — your first daily payment starts your plan. Money paid in
+                    can only ever become a product; there are no withdrawals.
                   </p>
-                )}
-                <hr className="border-border" />
-                <div className="flex justify-between text-body font-bold">
-                  <span>Total</span>
-                  <span className="text-primary">₦{total.toLocaleString("en-NG")}</span>
                 </div>
-              </div>
+              )}
 
-              <Button type="submit" size="lg" className="w-full gap-2 justify-center" disabled={loading}>
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full gap-2 justify-center"
+                disabled={submitDisabled}
+              >
                 {loading ? (
-                  "Placing order…"
+                  plan === "outright" ? "Placing order…" : "Starting plan…"
                 ) : (
                   <>
-                    Place order <ArrowRight className="size-4" />
+                    {ctaText} <ArrowRight className="size-4" />
                   </>
                 )}
               </Button>
@@ -396,7 +630,9 @@ export default function CheckoutPage() {
               <div className="space-y-2 pt-1">
                 <div className="flex items-center gap-2 text-caption text-muted-foreground">
                   <ShieldCheck className="size-3.5 flex-shrink-0 text-primary" />
-                  Stock is reserved once we confirm your payment.
+                  {plan === "outright"
+                    ? "Stock is reserved once we confirm your payment."
+                    : "We deliver once your plan reaches its delivery point."}
                 </div>
                 <div className="flex items-center gap-2 text-caption text-muted-foreground">
                   <Lock className="size-3.5 flex-shrink-0 text-primary" />
@@ -417,23 +653,27 @@ function MethodTile({
   title,
   desc,
   onClick,
+  disabled,
 }: {
   active: boolean;
   icon: React.ReactNode;
   title: string;
   desc: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={active}
       className={cn(
         "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
         active
           ? "border-primary bg-primary/5 ring-1 ring-primary"
           : "border-border hover:border-primary/40 hover:bg-muted/50",
+        disabled && "opacity-50 cursor-not-allowed hover:border-border hover:bg-transparent",
       )}
     >
       <div

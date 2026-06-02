@@ -147,6 +147,24 @@
     @apply min-h-full bg-background font-sans text-body text-foreground antialiased;
   }
 
+  /* Interactive elements show a pointer cursor (Tailwind v4 no longer does this by default). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  label[for],
+  select:not(:disabled),
+  summary,
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  select:disabled {
+    cursor: not-allowed;
+  }
+
   h1 {
     @apply text-h1;
   }

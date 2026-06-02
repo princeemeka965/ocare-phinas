@@ -13,10 +13,10 @@ const icons: Record<ToastVariant, React.ReactNode> = {
 };
 
 const styles: Record<ToastVariant, string> = {
-  success: "border-success/30 bg-success/10",
-  error: "border-destructive/30 bg-destructive/10",
-  info: "border-primary/30 bg-primary/10",
-  warning: "border-warning/40 bg-warning/10",
+  success: "border-success/40 bg-card",
+  error: "border-destructive/40 bg-card",
+  info: "border-primary/40 bg-card",
+  warning: "border-warning/50 bg-card",
 };
 
 export function ToastContainer() {
@@ -35,7 +35,7 @@ export function ToastContainer() {
         <div
           key={t.id}
           className={cn(
-            "pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-lg backdrop-blur-sm",
+            "pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-lg",
             "animate-[fade-in-up_0.3s_ease-out_forwards]",
             styles[t.variant],
           )}

@@ -87,9 +87,58 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
         {/* Status timeline */}
         {!isCancelled && (
-          <div className="rounded-2xl border border-border bg-card p-6 mb-6">
+          <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 mb-6">
             <h2 className="text-body font-semibold mb-5">Order progress</h2>
-            <div className="flex items-center gap-0 overflow-x-auto scrollbar-none pb-2">
+
+            {/* Vertical timeline — mobile */}
+            <ol className="sm:hidden">
+              {TIMELINE_STEPS.map((step, i) => {
+                const done = STATUS_ORDER.indexOf(step.key) <= statusIdx;
+                const current = step.key === order.status;
+                const last = i === TIMELINE_STEPS.length - 1;
+                const nextDone = !last && STATUS_ORDER.indexOf(TIMELINE_STEPS[i + 1].key) <= statusIdx;
+                return (
+                  <li key={step.key} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={cn(
+                          "flex size-8 items-center justify-center rounded-full border-2 transition-colors",
+                          done
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-muted-foreground",
+                        )}
+                      >
+                        {done ? (
+                          current ? <Clock className="size-4" /> : <CheckCircle2 className="size-4" />
+                        ) : (
+                          <Circle className="size-4" />
+                        )}
+                      </div>
+                      {!last && (
+                        <div
+                          className={cn(
+                            "w-0.5 flex-1 min-h-[1.25rem] my-1 transition-colors",
+                            nextDone ? "bg-primary" : "bg-border",
+                          )}
+                        />
+                      )}
+                    </div>
+                    <span
+                      className={cn(
+                        "text-body-sm font-medium leading-tight pt-1.5",
+                        last ? "pb-0" : "pb-4",
+                        done ? "text-primary" : "text-muted-foreground",
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {/* Horizontal timeline — sm and up */}
+            <div className="hidden sm:flex items-start gap-0">
               {TIMELINE_STEPS.map((step, i) => {
                 const done = STATUS_ORDER.indexOf(step.key) <= statusIdx;
                 const current = step.key === order.status;
@@ -97,7 +146,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                   <div
                     key={step.key}
                     className={cn(
-                      "flex items-center",
+                      "flex items-start",
                       i < TIMELINE_STEPS.length - 1 ? "flex-1" : "flex-shrink-0",
                     )}
                   >
@@ -118,7 +167,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                       </div>
                       <span
                         className={cn(
-                          "text-micro font-medium whitespace-nowrap max-w-[70px] text-center leading-tight",
+                          "text-micro font-medium max-w-[70px] text-center leading-tight",
                           done ? "text-primary" : "text-muted-foreground",
                         )}
                       >
@@ -128,7 +177,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                     {i < TIMELINE_STEPS.length - 1 && (
                       <div
                         className={cn(
-                          "h-0.5 flex-1 min-w-[1.5rem] sm:min-w-[3rem] mx-1 transition-colors",
+                          "h-0.5 flex-1 min-w-[3rem] mx-1 mt-4 transition-colors",
                           STATUS_ORDER.indexOf(TIMELINE_STEPS[i + 1].key) <= statusIdx
                             ? "bg-primary"
                             : "bg-border",

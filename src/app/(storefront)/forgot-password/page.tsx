@@ -23,7 +23,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="py-16 sm:py-20">
-      <Container className="max-w-sm">
+      <Container className="max-w-sm lg:max-w-lg">
         <Link
           href="/login"
           className={buttonVariants({ variant: "ghost", size: "sm" })}

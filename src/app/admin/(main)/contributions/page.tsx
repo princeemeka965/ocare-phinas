@@ -1,23 +1,29 @@
 import type { Metadata } from "next";
-import { CheckCircle, XCircle, Eye } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle, ChevronRight, MessageCircle, User, Users } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { naira } from "@/lib/pay-small-small";
+import { MOCK_CONTRIBUTIONS, contributionDetail } from "@/lib/contributions";
 
 export const metadata: Metadata = { title: "Contributions — OCare Phinas Admin" };
 
-const PENDING = [
-  { id: "1", member: "Emeka Nwosu", plan: "Group G-013", amount: 1000, date: "2026-05-29", hasProof: true },
-  { id: "2", member: "Chukwuemeka Anyanwu", plan: "Solo Plan", amount: 1000, date: "2026-05-29", hasProof: true },
-  { id: "3", member: "Ngozi Eze", plan: "Group G-016", amount: 1000, date: "2026-05-29", hasProof: false },
-];
+const TYPE_META = {
+  group: { label: "Group", icon: Users, variant: "default" as const },
+  solo: { label: "Solo", icon: User, variant: "secondary" as const },
+};
 
 export default function AdminContributionsPage() {
+  const pending = MOCK_CONTRIBUTIONS.filter((c) => c.status === "awaiting");
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-h1 font-bold">Plan Contributions</h1>
-        <p className="text-muted-foreground mt-1">Confirm daily payments from plan members. Confirming advances the day count and updates the member&apos;s ledger.</p>
+        <p className="text-muted-foreground mt-1">Members pay by manual bank transfer and send a screenshot on WhatsApp. <strong>Group</strong> payments are the strict slot daily (slots × ₦1,000); <strong>Solo</strong> payments are the member&apos;s chosen daily. Open a contribution to verify the screenshot, then confirm — which advances the plan and updates the member&apos;s ledger.</p>
       </div>
 
-      {PENDING.length === 0 ? (
+      {pending.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-16 text-center">
           <CheckCircle className="size-12 text-success mx-auto mb-3 opacity-50" />
           <p className="text-h3 font-semibold">All clear</p>
@@ -25,28 +31,30 @@ export default function AdminContributionsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {PENDING.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-border bg-card p-5">
-              <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-                <div>
-                  <p className="text-body font-semibold">{c.member}</p>
-                  <p className="text-body-sm text-muted-foreground">{c.plan} · {new Date(c.date).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+          {pending.map((c) => {
+            const meta = TYPE_META[c.type];
+            const TypeIcon = meta.icon;
+            return (
+              <Link
+                key={c.id}
+                href={`/admin/contributions/${c.id}`}
+                className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 hover:border-primary/40 hover:shadow-md transition-all group"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <p className="text-body font-semibold">{c.member.name}</p>
+                    <Badge variant={meta.variant} className="text-micro gap-1"><TypeIcon className="size-3" />{meta.label}</Badge>
+                  </div>
+                  <p className="text-body-sm text-muted-foreground font-mono">{contributionDetail(c)} · {new Date(c.date).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+                  <p className="text-caption text-muted-foreground flex items-center gap-1.5 mt-1">
+                    <MessageCircle className="size-3.5 text-[#25D366]" /> Screenshot sent on WhatsApp — verify before confirming
+                  </p>
                 </div>
-                <p className="text-h3 font-bold text-primary">₦{c.amount.toLocaleString("en-NG")}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                {c.hasProof ? (
-                  <button className="flex items-center gap-1.5 text-body-sm text-primary font-medium hover:underline"><Eye className="size-4" /> View screenshot</button>
-                ) : (
-                  <span className="text-body-sm text-muted-foreground italic">No screenshot — verify via WhatsApp</span>
-                )}
-                <div className="ml-auto flex gap-3">
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-success text-white font-semibold text-body-sm hover:bg-success/90 transition-colors"><CheckCircle className="size-4" /> Confirm</button>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-destructive/30 text-destructive font-semibold text-body-sm hover:bg-destructive/10 transition-colors"><XCircle className="size-4" /> Reject</button>
-                </div>
-              </div>
-            </div>
-          ))}
+                <p className="text-h3 font-bold text-primary flex-shrink-0">{naira(c.amount)}</p>
+                <ChevronRight className="size-5 text-muted-foreground/50 group-hover:text-muted-foreground flex-shrink-0" />
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

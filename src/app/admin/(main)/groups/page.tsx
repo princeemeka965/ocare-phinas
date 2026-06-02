@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Groups — OCare Phinas Admin" };
 
 const MOCK_GROUPS = [
-  { id: "1", ref: "G-017", members: 3, capacity: 10, status: "open" as const, startDate: "2026-06-01", daily: 1000, target: 50000 },
-  { id: "2", ref: "G-016", members: 8, capacity: 10, status: "open" as const, startDate: "2026-05-20", daily: 1000, target: 50000 },
-  { id: "3", ref: "G-015", members: 10, capacity: 10, status: "closed" as const, startDate: "2026-05-01", daily: 1000, target: 50000 },
-  { id: "4", ref: "G-014", members: 10, capacity: 10, status: "completed" as const, startDate: "2026-04-01", daily: 1000, target: 50000 },
+  { id: "1", ref: "G-017", slotsFilled: 3, totalSlots: 10, status: "open" as const, startDate: "2026-06-01" },
+  { id: "2", ref: "G-016", slotsFilled: 8, totalSlots: 10, status: "open" as const, startDate: "2026-05-20" },
+  { id: "3", ref: "G-015", slotsFilled: 10, totalSlots: 10, status: "closed" as const, startDate: "2026-05-01" },
+  { id: "4", ref: "G-014", slotsFilled: 10, totalSlots: 10, status: "completed" as const, startDate: "2026-04-01" },
 ];
 
 const STATUS_META = {
@@ -26,7 +26,7 @@ export default function AdminGroupsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-h1 font-bold">Pay Small Small — Groups</h1>
-          <p className="text-muted-foreground mt-1">Groups auto-close at 10 members. Capacity enforced server-side.</p>
+          <p className="text-muted-foreground mt-1">1 slot = ₦1,000/day for 50 days. Members take 1–2 slots (items ≤ ₦100,000). Groups auto-close when every slot is filled — capacity enforced server-side.</p>
         </div>
         <button className={cn(buttonVariants(), "gap-2")}><Plus className="size-4" /> Create group</button>
       </div>
@@ -46,7 +46,7 @@ export default function AdminGroupsPage() {
                       <span className="text-body font-bold font-mono">{group.ref}</span>
                       <Badge variant={meta.variant} className="text-micro">{meta.label}</Badge>
                     </div>
-                    <p className="text-caption text-muted-foreground">Started {new Date(group.startDate).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })} · ₦{group.daily.toLocaleString("en-NG")}/day · ₦{group.target.toLocaleString("en-NG")} target</p>
+                    <p className="text-caption text-muted-foreground">Started {new Date(group.startDate).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })} · ₦1,000/day per slot · ₦50,000 per slot/cycle</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -60,9 +60,9 @@ export default function AdminGroupsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${(group.members / group.capacity) * 100}%` }} />
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${(group.slotsFilled / group.totalSlots) * 100}%` }} />
                 </div>
-                <span className="text-caption font-semibold flex-shrink-0">{group.members}/{group.capacity} members</span>
+                <span className="text-caption font-semibold flex-shrink-0">{group.slotsFilled}/{group.totalSlots} slots</span>
               </div>
             </div>
           );

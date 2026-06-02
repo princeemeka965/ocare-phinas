@@ -11,26 +11,19 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import { planMath, soloPlanMath, naira, SOLO_MIN_DAILY } from "@/lib/pay-small-small";
 
 /* ------------------------------------------------------------------ */
-/* Solo plan = flexible layaway (CDcare style)                         */
-/* Pick ANY item at its real price, choose how often and how much you  */
-/* pay. No fixed daily amount, no ₦50k cap. We deliver once you reach  */
-/* the halfway mark, then you finish the balance.                      */
+/* Solo Plan (payment-flow §3, §5.2)                                   */
+/* Pick ANY item at its real price, then choose ANY daily amount you   */
+/* like — there's no slot lock on a solo plan. We suggest the slot     */
+/* daily (₦1,000 per slot) but you can pay more to finish faster or    */
+/* less to keep it gentle. We deliver at 50%; you finish the balance   */
+/* after. Solo plans have no price cap.                                */
 /* ------------------------------------------------------------------ */
-
-const DELIVERY_THRESHOLD = 0.5; // item ships once 50% is paid
-
-type Frequency = "daily" | "weekly" | "monthly";
-
-const FREQUENCIES: { value: Frequency; label: string; unit: string }[] = [
-  { value: "daily", label: "Daily", unit: "day" },
-  { value: "weekly", label: "Weekly", unit: "week" },
-  { value: "monthly", label: "Monthly", unit: "month" },
-];
 
 /* Mock eligible items — replace with DB query in Phase 3.
-   Includes big-ticket appliances so any budget/price works. */
+   Includes big-ticket appliances so any price works (no cap on solo). */
 const ITEMS = [
   { id: "f1", name: "Haier Thermocool Chest Freezer 300L", price: 350000, image: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=200&h=200&fit=crop&q=80" },
   { id: "f2", name: "Hisense Double-Door Refrigerator", price: 285000, image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&h=200&fit=crop&q=80" },
@@ -42,23 +35,12 @@ const ITEMS = [
   { id: "9", name: "Binatone Standing Fan 16-inch", price: 12500, image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=200&h=200&fit=crop&q=80" },
 ];
 
-const naira = (n: number) => `₦${Math.round(n).toLocaleString("en-NG")}`;
-
-/** A sensible starting per-cycle amount: ~3 months of payments at the chosen
-    frequency, rounded to a clean figure. The customer can change it freely. */
-function suggestAmount(price: number, freq: Frequency): number {
-  const cycles = freq === "daily" ? 90 : freq === "weekly" ? 13 : 3;
-  const raw = price / cycles;
-  const step = raw >= 5000 ? 1000 : 500;
-  return Math.max(step, Math.ceil(raw / step) * step);
-}
-
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?w=200&h=200&fit=crop&q=80";
 
 function SoloPlanInner() {
   const user = useUserStore((s) => s.user);
 
-  /* A product page can deep-link here with a chosen item (CDcare-style):
+  /* A product page can deep-link here with a chosen item:
      /pay-small-small/solo?name=…&price=…&image=… — we preselect it. */
   const params = useSearchParams();
   const prefillName = params.get("name");
@@ -73,29 +55,24 @@ function SoloPlanInner() {
 
   const [step, setStep] = useState<"pick" | "configure" | "done">(prefill ? "configure" : "pick");
   const [selectedItem, setSelectedItem] = useState<string | null>(prefill ? prefill.id : null);
-  const [frequency, setFrequency] = useState<Frequency>("daily");
-  const [amount, setAmount] = useState<number>(prefill ? suggestAmount(prefill.price, "daily") : 0);
+
+  /* Customer-chosen daily amount. Seeded with the slot-engine suggestion
+     when an item is picked, but the customer is free to change it. */
+  const [dailyInput, setDailyInput] = useState<string>(
+    prefill ? String(planMath(prefill.price).daily) : "",
+  );
 
   const selected = itemList.find((i) => i.id === selectedItem);
-  const freqMeta = FREQUENCIES.find((f) => f.value === frequency)!;
+  const daily = Number(dailyInput);
+  const dailyValid = daily >= SOLO_MIN_DAILY && selected ? daily <= selected.price : false;
+  const math = selected && daily > 0 ? soloPlanMath(selected.price, daily) : null;
 
-  /* --- derived plan maths --- */
-  const perCycle = amount > 0 ? amount : 0;
-  const payments = selected && perCycle > 0 ? Math.ceil(selected.price / perCycle) : 0;
-  const deliveryTarget = selected ? selected.price * DELIVERY_THRESHOLD : 0;
-  const paymentsToDelivery = selected && perCycle > 0 ? Math.ceil(deliveryTarget / perCycle) : 0;
-
-  const startConfigure = (id: string) => {
-    const item = itemList.find((i) => i.id === id)!;
+  /* Move to the configure step with a sensible default daily for the item. */
+  function pickItem(id: string, price: number) {
     setSelectedItem(id);
-    setAmount(suggestAmount(item.price, frequency));
+    setDailyInput(String(planMath(price).daily));
     setStep("configure");
-  };
-
-  const changeFrequency = (f: Frequency) => {
-    setFrequency(f);
-    if (selected) setAmount(suggestAmount(selected.price, f));
-  };
+  }
 
   /* --------------------------- AUTH GATE --------------------------- */
   if (!user) {
@@ -111,7 +88,7 @@ function SoloPlanInner() {
   }
 
   /* ----------------------------- DONE ----------------------------- */
-  if (step === "done" && selected) {
+  if (step === "done" && selected && math) {
     return (
       <div className="py-20">
         <Container className="max-w-sm">
@@ -121,8 +98,8 @@ function SoloPlanInner() {
             </div>
             <h1 className="text-h2 font-bold mb-2">Solo plan started!</h1>
             <p className="text-body-sm text-muted-foreground mb-8">
-              Your plan for the {selected.name} is active. Pay {naira(perCycle)} {frequency} and
-              track your progress on the My Plan page — we deliver once you reach the halfway mark.
+              Your plan for the {selected.name} is active. Pay {naira(math.daily)} every day and
+              track your progress on the My Plan page — we deliver once you reach 50%.
             </p>
             <Link href="/pay-small-small/my-plan" className={cn(buttonVariants({ size: "lg" }), "w-full gap-2 justify-center")}>
               Go to My Plan <ArrowRight className="size-4" />
@@ -134,7 +111,7 @@ function SoloPlanInner() {
   }
 
   /* -------------------------- CONFIGURE --------------------------- */
-  if (step === "configure" && selected) {
+  if (step === "configure" && selected && math) {
     return (
       <div className="py-8 sm:py-12">
         <Container className="max-w-2xl">
@@ -145,9 +122,10 @@ function SoloPlanInner() {
             <ArrowLeft className="size-4" /> Back
           </button>
 
-          <h1 className="text-h1 font-bold mb-1">Set up your plan</h1>
+          <h1 className="text-h1 font-bold mb-1">Confirm your plan</h1>
           <p className="text-body-sm text-muted-foreground mb-6">
-            Choose how often and how much you want to pay. It&apos;s entirely up to your budget.
+            Choose any daily amount you like — pay more to finish faster, or keep it gentle.
+            We deliver once you reach 50%, then you finish the balance.
           </p>
 
           {/* Item */}
@@ -164,59 +142,50 @@ function SoloPlanInner() {
             </div>
           </div>
 
-          {/* Frequency */}
-          <h2 className="text-body font-semibold mb-3">How often will you pay?</h2>
-          <div className="grid grid-cols-3 gap-2 mb-6">
-            {FREQUENCIES.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => changeFrequency(f.value)}
-                className={cn(
-                  "rounded-xl border py-3 text-body-sm font-semibold transition-all duration-200",
-                  frequency === f.value
-                    ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/30"
-                    : "border-border bg-card hover:border-primary/40",
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
+          {/* Daily amount — chosen by the customer */}
+          <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-5 mb-6">
+            <label htmlFor="daily" className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
+              Choose your daily payment
+            </label>
+            <div className="relative mt-2">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-h2 font-bold text-primary">₦</span>
+              <input
+                id="daily"
+                type="number"
+                inputMode="numeric"
+                min={SOLO_MIN_DAILY}
+                max={selected.price}
+                step={100}
+                value={dailyInput}
+                onChange={(e) => setDailyInput(e.target.value)}
+                placeholder="1,000"
+                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-h2 font-bold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <p className="text-caption text-muted-foreground mt-2">Per day — minimum {naira(SOLO_MIN_DAILY)}. You decide the pace.</p>
+
+            {/* Quick picks */}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {[1000, 2000, 5000, 10000].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setDailyInput(String(amt))}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-caption font-semibold transition-colors",
+                    daily === amt
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/40",
+                  )}
+                >
+                  {naira(amt)}/day
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Amount */}
-          <h2 className="text-body font-semibold mb-3">How much per {freqMeta.unit}?</h2>
-          <div className="relative mb-3">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-body font-semibold text-muted-foreground">₦</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={500}
-              step={500}
-              value={amount || ""}
-              onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
-              className="w-full rounded-xl border border-border bg-card py-3.5 pl-9 pr-4 text-body font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
-              placeholder="Enter amount"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2 mb-6">
-            {[2000, 5000, 10000, 20000].map((preset) => (
-              <button
-                key={preset}
-                onClick={() => setAmount(preset)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-caption font-medium transition-colors",
-                  amount === preset
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40",
-                )}
-              >
-                {naira(preset)}
-              </button>
-            ))}
-          </div>
-
-          {/* Live summary */}
-          {perCycle > 0 && (
+          {/* Plan summary */}
+          {math && dailyValid ? (
             <div className="rounded-2xl border border-border bg-muted/50 p-5 mb-6 space-y-3">
               <div className="flex items-center gap-2 text-body-sm font-semibold">
                 <CalendarClock className="size-4 text-primary" />
@@ -224,10 +193,10 @@ function SoloPlanInner() {
               </div>
               <div className="space-y-2 text-body-sm">
                 {[
-                  ["Payment", `${naira(perCycle)} ${frequency}`],
+                  ["Daily payment", `${naira(math.daily)}/day`],
                   ["Item price", naira(selected.price)],
-                  ["Estimated payments", `${payments} ${freqMeta.unit}${payments !== 1 ? "s" : ""}`],
-                  ["Plan type", "Solo (flexible)"],
+                  ["Days to fully pay", `${math.daysToComplete} days`],
+                  ["Plan type", "Solo"],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-3">
                     <span className="text-muted-foreground">{k}</span>
@@ -238,25 +207,24 @@ function SoloPlanInner() {
               <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 p-3 text-caption">
                 <Truck className="size-4 text-primary flex-shrink-0 mt-0.5" />
                 <span className="text-muted-foreground">
-                  We deliver your item once you&apos;ve paid <span className="font-semibold text-foreground">{naira(deliveryTarget)}</span> (50%)
-                  — about <span className="font-semibold text-foreground">{paymentsToDelivery} payment{paymentsToDelivery !== 1 ? "s" : ""}</span> in.
-                  You then finish the balance at your own pace.
+                  We deliver your item once you&apos;ve paid <span className="font-semibold text-foreground">{naira(math.deliveryTarget)}</span> (50%)
+                  — about <span className="font-semibold text-foreground">{math.daysToDelivery} days</span> in.
+                  You then finish the balance.
                 </span>
               </div>
             </div>
+          ) : (
+            <p className="text-caption text-destructive mb-6">
+              Enter a daily amount between {naira(SOLO_MIN_DAILY)} and {naira(selected.price)} to see your plan.
+            </p>
           )}
 
           <p className="text-caption text-muted-foreground mb-5">
-            No interest, no penalties. Missing a payment just pauses your progress. You can only have
-            one active plan at a time.
+            No interest, no penalties. Missing a day just pauses your progress. Money paid in can only ever become a
+            product — there are no withdrawals. You can run more than one plan at a time.
           </p>
 
-          <Button
-            size="lg"
-            className="w-full gap-2"
-            disabled={perCycle < 500}
-            onClick={() => setStep("done")}
-          >
+          <Button size="lg" className="w-full gap-2" disabled={!math || !dailyValid} onClick={() => setStep("done")}>
             <User className="size-5" /> Start my solo plan
           </Button>
         </Container>
@@ -279,30 +247,38 @@ function SoloPlanInner() {
           <h1 className="text-h1 font-bold">Start a Solo Plan</h1>
         </div>
         <p className="text-body-sm text-muted-foreground mb-8 max-w-2xl">
-          Pick any item — from a ₦12,000 fan to a ₦350,000 freezer. Then choose how often and how much
-          you pay. No fixed amount, no target cap. We deliver once you&apos;re halfway there.
+          Pick any item — from a ₦12,000 fan to a ₦350,000 freezer — then choose any daily amount that suits you.
+          Pay more to finish faster, or keep it gentle. We deliver once you&apos;re halfway.
         </p>
 
         <h2 className="text-body font-semibold mb-4">Pick your item</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
-          {itemList.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => startConfigure(item.id)}
-              className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-primary/40 hover:shadow-md"
-            >
-              <div className="size-14 rounded-xl overflow-hidden border border-border flex-shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-body-sm font-semibold line-clamp-2">{item.name}</p>
-                <p className="text-body font-bold text-primary mt-0.5">{naira(item.price)}</p>
-              </div>
-              <ArrowRight className="size-5 text-muted-foreground flex-shrink-0" />
-            </button>
-          ))}
+          {itemList.map((item) => {
+            const m = planMath(item.price);
+            return (
+              <button
+                key={item.id}
+                onClick={() => pickItem(item.id, item.price)}
+                className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-primary/40 hover:shadow-md"
+              >
+                <div className="size-14 rounded-xl overflow-hidden border border-border flex-shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-body-sm font-semibold line-clamp-2">{item.name}</p>
+                  <p className="text-body font-bold text-primary mt-0.5">{naira(item.price)}</p>
+                  <p className="text-caption text-muted-foreground">from {naira(m.daily)}/day · you choose the pace</p>
+                </div>
+                <ArrowRight className="size-5 text-muted-foreground flex-shrink-0" />
+              </button>
+            );
+          })}
         </div>
+
+        <p className="text-caption text-muted-foreground mt-4">
+          You set your own daily amount (minimum {naira(SOLO_MIN_DAILY)}). We deliver at 50%; you finish the balance after.
+        </p>
       </Container>
     </div>
   );

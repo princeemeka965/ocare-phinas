@@ -8,40 +8,40 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Pay Small Small — OCare Phinas",
-  description: "Pick any item and pay for it your way — daily, weekly or monthly, at your own budget. Start a flexible solo plan, or join a ₦1,000/day group. No interest, no stress.",
+  description: "Own any item by paying ₦1,000 a day per slot. Start a solo plan (no price cap) or join a group for items up to ₦100,000. No interest, no withdrawals — your money only ever becomes a product.",
 };
 
 const HOW_IT_WORKS = [
-  { step: "1", title: "Pick your item", body: "Choose anything you want — from a ₦12,000 fan to a ₦350,000 freezer. No price cap." },
-  { step: "2", title: "Set your plan", body: "Decide how often you pay — daily, weekly or monthly — and how much per payment. It's your budget." },
-  { step: "3", title: "Pay & we track", body: "Transfer each payment to our bank and send your screenshot on WhatsApp. We confirm and update your ledger." },
-  { step: "4", title: "Halfway? We deliver", body: "Once you've paid 50%, we deliver your item — then you finish the balance at your own pace." },
+  { step: "1", title: "Pick your item", body: "Choose anything you want. We work out the slots: price ÷ ₦50,000, rounded up." },
+  { step: "2", title: "Pay ₦1,000 per slot, daily", body: "Each slot is ₦1,000 a day for 50 days. The daily amount is fixed — no paying ahead, no guesswork." },
+  { step: "3", title: "Pay & we track", body: "Transfer each day's amount to our bank and send your screenshot on WhatsApp. We confirm and update your ledger." },
+  { step: "4", title: "Get your item", body: "Solo plans deliver at 50%, then you finish the balance. Group items arrive in position order as funds build." },
 ];
 
 const FAQS = [
   {
-    q: "How much do I have to pay, and how often?",
-    a: "On a solo plan, that's entirely up to you. Pick any item, then choose to pay daily, weekly or monthly — and set the amount that fits your budget. There's no fixed daily figure and no price cap.",
+    q: "How much do I pay, and how often?",
+    a: "It's worked out from the price. One slot is ₦1,000 every day; the number of slots is the price divided by ₦50,000, rounded up (so a ₦120,000 item is 3 slots = ₦3,000/day). You pay exactly that daily amount — there's no paying ahead.",
   },
   {
     q: "When do I get my item?",
-    a: "Once you've paid up to half (50%) of the item's price, we deliver it to you. You then continue paying the remaining balance at your own pace — just like CDcare.",
+    a: "On a solo plan, once you've paid half (50%) of the price we deliver it, and you finish the balance afterwards. In a group, items are delivered in position order as the group's funds build.",
+  },
+  {
+    q: "Can I get my money back as cash?",
+    a: "No — and that's by design. Money you pay in can only ever become a product, now or later. There are no cash withdrawals anywhere in the system. Any surplus stays in your wallet's available balance for another item.",
   },
   {
     q: "What happens if I miss a payment?",
-    a: "Missing a payment just pauses your progress — there are no penalties or late fees. Simply continue when you can. We encourage consistency, but life happens.",
-  },
-  {
-    q: "How are payments confirmed?",
-    a: "Transfer your payment to our bank account, include your plan reference in the narration, then send your screenshot on WhatsApp. Our team confirms it and updates your ledger.",
+    a: "Missing a day just pauses your progress — there are no penalties or late fees. Continue when you can. We encourage consistency, but life happens.",
   },
   {
     q: "What's the difference between a solo plan and a group plan?",
-    a: "A solo plan is the flexible option — any item, any amount, any frequency, just you. A group plan is a fixed savings circle: ₦1,000 every day with up to 10 members working toward a ₦50,000 target. Solo is the main option; the group is there if you prefer a set daily routine.",
+    a: "A solo plan is just you, with no price cap — pick any item and pay ₦1,000 per slot daily, delivered at 50%. A group plan is a shared slot pool for items up to ₦100,000 (1 or 2 slots each), where members receive their item in position order. You can run several plans at once.",
   },
   {
     q: "Is this mandatory to shop?",
-    a: "Absolutely not. Pay Small Small is completely optional. You can browse and buy normally without ever starting a plan.",
+    a: "Absolutely not. Pay Small Small is completely optional — you can buy any item outright instead. Joining a plan never blocks an outright purchase.",
   },
 ];
 
@@ -73,7 +73,7 @@ export default function PSSLandingPage() {
             </span>
           </h1>
           <p className="text-body-lg text-white/80 mb-10 max-w-[46ch] mx-auto">
-            Pick any item and pay for it your way — daily, weekly or monthly, at a budget you set. We deliver once you&apos;re halfway. No interest, no price cap.
+            Pick any item and pay ₦1,000 a day per slot. Solo plans deliver at 50% with no price cap; groups cover items up to ₦100,000. No interest, no withdrawals.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -133,10 +133,10 @@ export default function PSSLandingPage() {
               </div>
               <h3 className="text-h3 font-bold mb-2">Solo Plan</h3>
               <p className="text-body-sm text-muted-foreground mb-5 flex-1">
-                The flexible way to own anything. Pick any item at its real price, then pay daily, weekly or monthly — whatever amount fits your budget. We deliver once you reach the halfway mark.
+                Own anything, just you — no price cap. Pick an item and pay ₦1,000 per slot every day (slots = price ÷ ₦50,000, rounded up). We deliver once you reach the halfway mark, then you finish the balance.
               </p>
               <ul className="space-y-2 mb-6">
-                {["Any item, any price — no ₦50k cap", "Pay daily, weekly or monthly", "Set your own amount", "Delivered at 50% paid"].map((f) => (
+                {["Any item, no price cap", "₦1,000 per slot, daily", "Delivered at 50% paid", "Run several plans at once"].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-body-sm">
                     <CheckCircle className="size-4 text-primary flex-shrink-0" />
                     {f}
@@ -155,10 +155,10 @@ export default function PSSLandingPage() {
               </div>
               <h3 className="text-h3 font-bold mb-2">Group Plan</h3>
               <p className="text-body-sm text-muted-foreground mb-5 flex-1">
-                Prefer a fixed routine? Join a savings circle of up to 10 members, each paying ₦1,000 every day toward a ₦50,000 target. Each member saves independently — shared motivation, no chat.
+                For items up to ₦100,000. Join a shared slot pool and take 1 or 2 slots (₦1,000 each, daily). Members receive their item in position order as the group&apos;s funds build — no chat, just progress.
               </p>
               <ul className="space-y-2 mb-6">
-                {["Fixed ₦1,000 every day", "₦50,000 target in 50 days", "Up to 10 members per group", "Group closes when full"].map((f) => (
+                {["Items up to ₦100,000", "₦1,000 per slot, 1 or 2 slots", "Delivered by group position", "Group closes when full"].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-body-sm">
                     <CheckCircle className="size-4 text-accent flex-shrink-0" />
                     {f}

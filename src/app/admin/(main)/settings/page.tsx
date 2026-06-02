@@ -38,7 +38,7 @@ export default function AdminSettingsPage() {
 
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
           <h2 className="text-body font-semibold">Payment WhatsApp number</h2>
-          <p className="text-caption text-muted-foreground -mt-2">Used for all "send screenshot" deep links site-wide.</p>
+          <p className="text-caption text-muted-foreground -mt-2">Used for all &ldquo;send screenshot&rdquo; deep links site-wide.</p>
           <div><label className={labelClass}>WhatsApp number (international format)</label><input type="text" defaultValue="+2340000000000" placeholder="+2348012345678" className={inputClass} /></div>
         </div>
 
@@ -54,13 +54,15 @@ export default function AdminSettingsPage() {
 
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
           <h2 className="text-body font-semibold">Pay Small Small defaults</h2>
-          <p className="text-caption text-muted-foreground -mt-2">Inherited by new groups and shown to customers on plan pages.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div><label className={labelClass}>Daily amount (₦)</label><input type="number" defaultValue={1000} min={100} className={inputClass} /></div>
-            <div><label className={labelClass}>Duration (days)</label><input type="number" defaultValue={50} min={1} className={inputClass} /></div>
-            <div><label className={labelClass}>Target value (₦)</label><input type="number" defaultValue={50000} min={1000} className={inputClass} /></div>
-            <div><label className={labelClass}>Group size</label><input type="number" defaultValue={10} min={2} max={50} className={inputClass} /></div>
+          <p className="text-caption text-muted-foreground -mt-2">The slot engine: 1 slot = ₦1,000/day for 50 days (₦50,000 per slot/cycle). Slots required = price ÷ ₦50,000, rounded up. Group plans use the strict slot daily; Solo plans let the member choose any daily at or above the solo minimum.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div><label className={labelClass}>Per-slot daily (₦)</label><input type="number" defaultValue={1000} min={100} className={inputClass} /></div>
+            <div><label className={labelClass}>Cycle length (days)</label><input type="number" defaultValue={50} min={1} className={inputClass} /></div>
+            <div><label className={labelClass}>Solo minimum daily (₦)</label><input type="number" defaultValue={100} min={1} className={inputClass} /></div>
+            <div><label className={labelClass}>Group slots</label><input type="number" defaultValue={10} min={2} max={50} className={inputClass} /></div>
+            <div><label className={labelClass}>Group price cap (₦)</label><input type="number" defaultValue={100000} min={50000} step={50000} className={inputClass} /></div>
           </div>
+          <p className="text-caption text-muted-foreground">Solo plans deliver at 50% and have no price cap. Group plans cover items up to the cap (max 2 slots per member). Money is never withdrawn as cash.</p>
         </div>
 
         <div className="flex items-center gap-3">
