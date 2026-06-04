@@ -13,19 +13,10 @@ const sections: LegalSection[] = [
     id: "introduction",
     heading: "Introduction",
     body: (
-      <>
-        <p>
-          Ocare Phinas Integrated Services (&quot;OCare Phinas&quot;, &quot;we&quot;,
-          &quot;us&quot;, or &quot;our&quot;) respects your privacy and is committed to protecting
-          the personal information you share with us. This Privacy Policy explains what information
-          we collect, how we use it, and the choices you have when you use our website, shop with
-          us, or join a Pay Small Small contribution or payment plan.
-        </p>
-        <p>
-          By using our platform, you agree to the collection and use of information in accordance
-          with this policy.
-        </p>
-      </>
+      <p>
+        Ocare Phinas Integrated Services values your privacy and is committed to protecting your
+        personal information.
+      </p>
     ),
   },
   {
@@ -33,13 +24,15 @@ const sections: LegalSection[] = [
     heading: "Information We Collect",
     body: (
       <>
-        <p>We collect information you provide directly and information generated as you use our services:</p>
+        <p>We may collect:</p>
         <ul>
-          <li><strong>Account details</strong> — name, email address, phone number, and password.</li>
-          <li><strong>Order information</strong> — products ordered, delivery address, and order history.</li>
-          <li><strong>Payment information</strong> — bank transfer references and payment screenshots you send for manual confirmation. We do not store card numbers or bank login credentials.</li>
-          <li><strong>Plan information</strong> — contribution group membership and personal payment-plan progress.</li>
-          <li><strong>Technical data</strong> — device, browser, and usage information collected automatically to keep the service secure and reliable.</li>
+          <li>Full name</li>
+          <li>Phone number</li>
+          <li>Email address</li>
+          <li>Residential address</li>
+          <li>Payment information</li>
+          <li>Transaction history</li>
+          <li>Device and browser information</li>
         </ul>
       </>
     ),
@@ -49,94 +42,163 @@ const sections: LegalSection[] = [
     heading: "How We Use Your Information",
     body: (
       <>
-        <p>We use your information to:</p>
+        <p>Your information may be used to:</p>
         <ul>
-          <li>Process orders, confirm payments, and arrange deliveries.</li>
-          <li>Manage your account, contribution groups, and payment plans.</li>
-          <li>Provide customer support and respond to your enquiries.</li>
-          <li>Send important updates about your orders, plans, and account.</li>
-          <li>Improve our products, services, and overall customer experience.</li>
-          <li>Detect, prevent, and address fraud or security issues.</li>
+          <li>Create and manage your account.</li>
+          <li>Process orders and payments.</li>
+          <li>Verify transactions.</li>
+          <li>Communicate with you.</li>
+          <li>Improve our services.</li>
+          <li>Comply with legal obligations.</li>
         </ul>
       </>
     ),
   },
   {
-    id: "sharing",
-    heading: "How We Share Information",
-    body: (
-      <>
-        <p>
-          We do not sell your personal information. We share it only when necessary to operate our
-          services — for example, with delivery partners to fulfil your orders, or with service
-          providers who help us run the platform, all of whom are required to protect your data.
-        </p>
-        <p>
-          We may also disclose information where required by law, or to protect the rights, safety,
-          and property of our customers and our business.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: "data-security",
-    heading: "Data Security",
+    id: "data-protection",
+    heading: "Data Protection",
     body: (
       <p>
-        We apply reasonable technical and organisational measures to protect your information
-        against unauthorised access, loss, or misuse. However, no method of transmission or storage
-        is completely secure, and we cannot guarantee absolute security. Please keep your account
-        password confidential.
+        We implement reasonable administrative, technical, and organizational safeguards to protect
+        user information.
       </p>
     ),
   },
   {
-    id: "your-rights",
-    heading: "Your Rights and Choices",
+    id: "information-sharing",
+    heading: "Information Sharing",
     body: (
       <>
-        <p>You may:</p>
+        <p>We do not sell customer information.</p>
+        <p>Information may be shared only with:</p>
         <ul>
-          <li>Access and update your account information at any time.</li>
-          <li>Request a copy or correction of the personal data we hold about you.</li>
-          <li>Request deletion of your account, subject to any legal or transactional obligations.</li>
-          <li>Opt out of non-essential communications.</li>
+          <li>Payment processors</li>
+          <li>Delivery partners</li>
+          <li>Regulatory authorities where legally required</li>
         </ul>
-        <p>To exercise any of these rights, contact us using the details below.</p>
       </>
+    ),
+  },
+  {
+    id: "cookies",
+    heading: "Cookies",
+    body: (
+      <p>
+        Our website may use cookies to improve user experience and platform functionality.
+      </p>
+    ),
+  },
+  {
+    id: "user-rights",
+    heading: "User Rights",
+    body: (
+      <p>
+        Users may request access, correction, or deletion of personal information subject to
+        applicable laws and business requirements.
+      </p>
     ),
   },
   {
     id: "retention",
-    heading: "Data Retention",
+    heading: "Retention of Data",
     body: (
       <p>
-        We retain your information for as long as your account is active or as needed to provide our
-        services, comply with legal obligations, resolve disputes, and enforce our agreements.
+        We retain information only as long as reasonably necessary for operational, legal, and
+        security purposes.
       </p>
     ),
   },
   {
-    id: "changes",
-    heading: "Changes to This Policy",
+    id: "updates",
+    heading: "Updates",
     body: (
-      <p>
-        We may update this Privacy Policy from time to time. When we do, we will revise the
-        &quot;Last updated&quot; date above. Significant changes may be communicated to you
-        directly. Continued use of our services after changes take effect means you accept the
-        updated policy.
-      </p>
+      <>
+        <p>This Privacy Policy may be updated periodically.</p>
+        <p>Continued use of our platform indicates acceptance of any updates.</p>
+      </>
+    ),
+  },
+  {
+    id: "refund-savings-policy",
+    heading: "Refund, Cancellation and Savings Plan Policy",
+    body: (
+      <>
+        <p>
+          <strong>Outright Purchase</strong>
+        </p>
+        <p>Customers may cancel an order before product processing begins.</p>
+        <p>Approved refunds may take up to 14 business days.</p>
+        <p>Transaction fees and processing charges may be deducted where applicable.</p>
+
+        <p>
+          <strong>Solo Savings Plan</strong>
+        </p>
+        <p>Customers may contribute daily, weekly, or monthly toward a selected product.</p>
+        <p>Savings remain the property of the customer.</p>
+        <p>
+          Where a customer chooses to discontinue participation before delivery, a refund request
+          may be submitted.
+        </p>
+        <p>Administrative charges may apply.</p>
+        <p>
+          Where product prices increase significantly during the savings period, customers may be
+          required to pay the difference before delivery.
+        </p>
+
+        <p>
+          <strong>Group Savings Plan</strong>
+        </p>
+        <p>Customers agree to contribute according to the group&apos;s contribution schedule.</p>
+        <p>
+          Failure to maintain required contributions may affect eligibility for product allocation.
+        </p>
+        <p>
+          Where a customer voluntarily exits a group before completion, management reserves the
+          right to apply administrative charges before processing any eligible refund.
+        </p>
+        <p>Refund timelines may vary depending on the status of the group cycle.</p>
+
+        <p>
+          <strong>Product Delivery</strong>
+        </p>
+        <p>
+          Delivery eligibility is determined according to the applicable plan rules and payment
+          status.
+        </p>
+        <p>Ocare Phinas reserves the right to verify all records before releasing products.</p>
+
+        <p>
+          <strong>Fraud Prevention</strong>
+        </p>
+        <p>
+          Any attempt to manipulate contributions, submit false payment records, or exploit
+          platform features may result in account suspension and forfeiture of benefits pending
+          investigation.
+        </p>
+
+        <p>
+          <strong>Exceptional Circumstances</strong>
+        </p>
+        <p>
+          Ocare Phinas reserves the right to review refund requests on a case-by-case basis where
+          exceptional circumstances exist.
+        </p>
+        <p>Management decisions regarding exceptional cases shall be final.</p>
+      </>
     ),
   },
   {
     id: "contact",
-    heading: "Contact Us",
+    heading: "Contact",
     body: (
-      <p>
-        If you have any questions about this Privacy Policy or how we handle your information,
-        please reach us via our <a href="/contact">Contact page</a>, by email at{" "}
-        <a href="mailto:support@ocarephinas.com">support@ocarephinas.com</a>, or on WhatsApp.
-      </p>
+      <>
+        <p>For privacy-related inquiries, contact:</p>
+        <p>
+          <strong>Ocare Phinas Integrated Services</strong>
+          <br />
+          Phone: <a href="tel:+2347069640753">07069640753</a>
+        </p>
+      </>
     ),
   },
 ];
@@ -146,8 +208,8 @@ export default function PrivacyPage() {
     <LegalPage
       title="Privacy Policy"
       breadcrumb="Privacy Policy"
-      intro="Your privacy matters to us. This policy describes how Ocare Phinas Integrated Services collects, uses, and protects your personal information."
-      lastUpdated="30 May 2026"
+      intro="Ocare Phinas Integrated Services values your privacy. This policy describes the information we collect, how we use it, and our refund, cancellation, and savings plan terms."
+      lastUpdated="4 June 2026"
       sections={sections}
     />
   );

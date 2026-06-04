@@ -10,12 +10,13 @@
  *   slots       = ceil(price / 50,000)                                 *
  *   daily       = slots × ₦1,000                                       *
  *                                                                      *
- * Group Plans are STRICTLY the daily amount — no paying ahead, no      *
- * custom amounts, no weekly/monthly. Solo Plans are the exception:     *
- * the customer chooses ANY daily amount they like (the slot daily is   *
- * only offered as a suggestion). Money can never be withdrawn as cash; *
- * it only ever becomes a product. Solo plans deliver at 50%.           *
- * Group Plans apply only to products of ₦100,000 or less (1–2 slots).  *
+ * The slot engine drives GROUP Plans only: a strict daily amount, no   *
+ * paying ahead, no custom amounts. SOLO Plans do NOT use slots — the    *
+ * customer chooses how AND when to pay: any amount, paid daily, weekly  *
+ * or monthly (see SOLO_FREQUENCIES / soloPlanMath below). Money can     *
+ * never be withdrawn as cash; it only ever becomes a product. Solo      *
+ * plans deliver at 50%. Group Plans apply only to products of ₦100,000  *
+ * or less (1–2 slots).                                                  *
  * ------------------------------------------------------------------ */
 
 /** Naira paid per slot, per day. */
@@ -90,36 +91,94 @@ export function planMath(price: number): PlanMath {
   };
 }
 
-/** Smallest daily amount we accept on a Solo Plan. */
-export const SOLO_MIN_DAILY = 100;
+/* ------------------------------------------------------------------ *
+ * Solo plan — the customer chooses how AND when to pay.                 *
+ * There is no slot lock: pick any amount, and pay it daily, weekly or   *
+ * monthly. We just work out how long it takes to reach 50% and 100%.    *
+ * ------------------------------------------------------------------ */
+
+/** How often a customer pays into a Solo Plan. */
+export type SoloFrequency = "daily" | "weekly" | "monthly";
+
+export interface SoloFrequencyMeta {
+  /** Display label, e.g. "Weekly". */
+  label: string;
+  /** Singular period noun, e.g. "week". */
+  unit: string;
+  /** Suffix for an amount, e.g. "/week". */
+  per: string;
+  /** Length of one payment period in days. */
+  days: number;
+  /** Smallest amount we accept per payment at this frequency. */
+  min: number;
+}
+
+/** Per-frequency configuration. Order is the display order. */
+export const SOLO_FREQUENCIES: Record<SoloFrequency, SoloFrequencyMeta> = {
+  daily: { label: "Daily", unit: "day", per: "/day", days: 1, min: 100 },
+  weekly: { label: "Weekly", unit: "week", per: "/week", days: 7, min: 500 },
+  monthly: { label: "Monthly", unit: "month", per: "/month", days: 30, min: 2_000 },
+};
+
+/** Smallest daily amount we accept on a Solo Plan (kept for callers that default to daily). */
+export const SOLO_MIN_DAILY = SOLO_FREQUENCIES.daily.min;
+
+/**
+ * Suggested per-payment amount at a frequency — a gentle default the customer
+ * can freely change. We take a baseline daily pace for the price and scale it
+ * to the chosen period (×7 weekly, ×30 monthly).
+ */
+export function suggestedSoloAmount(price: number, frequency: SoloFrequency): number {
+  return dailyForPrice(price) * SOLO_FREQUENCIES[frequency].days;
+}
 
 export interface SoloPlanMath {
-  /** The daily amount the customer chose. */
-  daily: number;
+  /** The amount the customer chose to pay each period. */
+  amount: number;
+  /** How often that amount is paid. */
+  frequency: SoloFrequency;
+  /** Length of one payment period in days. */
+  periodDays: number;
   /** The full item price. */
   price: number;
-  /** Days to fully pay the product off at the chosen daily rate. */
+  /** Number of payments to fully pay the product off. */
+  paymentsToComplete: number;
+  /** Days to fully pay the product off at the chosen pace. */
   daysToComplete: number;
   /** Naira at which a Solo Plan delivers (50% of price). */
   deliveryTarget: number;
+  /** Number of payments to reach the 50% solo delivery trigger. */
+  paymentsToDelivery: number;
   /** Days of payment to reach the 50% solo delivery trigger. */
   daysToDelivery: number;
 }
 
 /**
- * Solo-plan maths for a customer-chosen daily amount. Unlike the slot
- * engine, the daily payment is whatever the customer picks (≥ ₦100);
- * we just work out how long it takes to reach 50% and 100%.
+ * Solo-plan maths for a customer-chosen amount paid daily, weekly or
+ * monthly. The amount is whatever the customer picks (≥ the frequency
+ * minimum); we work out how many payments — and days — it takes to reach
+ * 50% (delivery) and 100% (fully paid).
  */
-export function soloPlanMath(price: number, daily: number): SoloPlanMath {
-  const safeDaily = Math.max(1, daily);
+export function soloPlanMath(
+  price: number,
+  amount: number,
+  frequency: SoloFrequency = "daily",
+): SoloPlanMath {
+  const meta = SOLO_FREQUENCIES[frequency];
+  const safeAmount = Math.max(1, amount);
   const deliveryTarget = Math.round(price * SOLO_DELIVERY_THRESHOLD);
+  const paymentsToComplete = Math.ceil(price / safeAmount);
+  const paymentsToDelivery = Math.ceil(deliveryTarget / safeAmount);
   return {
-    daily,
+    amount,
+    frequency,
+    periodDays: meta.days,
     price,
-    daysToComplete: Math.ceil(price / safeDaily),
+    paymentsToComplete,
+    daysToComplete: paymentsToComplete * meta.days,
     deliveryTarget,
-    daysToDelivery: Math.ceil(deliveryTarget / safeDaily),
+    paymentsToDelivery,
+    daysToDelivery: paymentsToDelivery * meta.days,
   };
 }
 

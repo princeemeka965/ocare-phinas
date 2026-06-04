@@ -74,6 +74,7 @@ export default function BrandsPage() {
                       name={brand.name}
                       logoSlug={brand.logoSlug}
                       logoUrl={brand.logoUrl}
+                      logoUrlDark={brand.logoUrlDark}
                       invertOnDark={brand.invertOnDark}
                       imgClassName="h-11 w-auto max-w-full"
                       textClassName="text-h3 font-bold text-foreground/70 group-hover:text-primary transition-colors"
@@ -121,6 +122,7 @@ export default function BrandsPage() {
                     name={brand.name}
                     logoSlug={brand.logoSlug}
                     logoUrl={brand.logoUrl}
+                    logoUrlDark={brand.logoUrlDark}
                     invertOnDark={brand.invertOnDark}
                     imgClassName="h-8 w-auto max-w-full"
                     textClassName="text-body-sm font-bold text-foreground/70 group-hover:text-primary transition-colors"

@@ -17,7 +17,7 @@ import {
 
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
-import { naira, SOLO_DELIVERY_THRESHOLD } from "@/lib/pay-small-small";
+import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES, type SoloFrequency } from "@/lib/pay-small-small";
 import { CycleCompletePrompt } from "./cycle-complete-prompt";
 
 export const metadata: Metadata = { title: "My Plan — Pay Small Small — OCare Phinas" };
@@ -35,8 +35,9 @@ interface Plan {
   productName: string;
   productImage: string;
   productPrice: number;
-  slots: number;
-  daily: number;
+  slots?: number; // group only — the shared slot pool
+  frequency?: SoloFrequency; // solo only — how often the customer pays
+  daily: number; // amount paid each period
   amountAllocated: number;
   status: PlanStatus;
   position?: number; // group position
@@ -64,7 +65,7 @@ const MOCK_PLANS: Plan[] = [
     productName: "Haier Thermocool Chest Freezer 300L",
     productImage: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=400&h=400&fit=crop&q=85",
     productPrice: 350000,
-    slots: 7,
+    frequency: "daily",
     daily: 7000,
     amountAllocated: 196000, // past 50% → delivered, finishing balance
     status: "delivered",
@@ -234,8 +235,9 @@ export default function MyPlanPage() {
                     </div>
                     <p className="text-body-sm font-semibold line-clamp-1">{plan.productName}</p>
                     <p className="text-caption text-muted-foreground">
-                      {naira(plan.daily)}/day · {plan.slots} slot{plan.slots !== 1 ? "s" : ""}
-                      {plan.type === "group" && plan.position ? ` · position ${plan.position}` : ""}
+                      {plan.type === "group"
+                        ? `${naira(plan.daily)}/day · ${plan.slots} slot${plan.slots !== 1 ? "s" : ""}${plan.position ? ` · position ${plan.position}` : ""}`
+                        : `${naira(plan.daily)}${SOLO_FREQUENCIES[plan.frequency ?? "daily"].per}`}
                     </p>
 
                     {/* Progress */}

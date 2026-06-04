@@ -10,138 +10,134 @@ export const metadata: Metadata = {
 
 const sections: LegalSection[] = [
   {
-    id: "acceptance",
-    heading: "Acceptance of Terms",
-    body: (
-      <p>
-        These Terms &amp; Conditions (&quot;Terms&quot;) govern your access to and use of the
-        services provided by Ocare Phinas Integrated Services (&quot;OCare Phinas&quot;,
-        &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;). By creating an account, placing an
-        order, or joining a payment or contribution plan, you agree to these Terms. If you do not
-        agree, please do not use our services.
-      </p>
-    ),
-  },
-  {
-    id: "accounts",
-    heading: "Accounts",
+    id: "introduction",
+    heading: "Introduction",
     body: (
       <>
         <p>
-          To access certain features, you must create an account and provide accurate, complete
-          information. You are responsible for safeguarding your password and for all activity under
-          your account.
+          Welcome to Ocare Phinas Integrated Services (&quot;Ocare Phinas&quot;, &quot;we&quot;,
+          &quot;our&quot;, or &quot;us&quot;).
         </p>
+        <p>
+          By creating an account, accessing our website, placing an order, participating in a savings
+          plan, or using any of our services, you agree to be bound by these Terms and Conditions.
+        </p>
+        <p>If you do not agree with any part of these Terms, please discontinue use of our services.</p>
+      </>
+    ),
+  },
+  {
+    id: "eligibility",
+    heading: "Eligibility",
+    body: (
+      <>
+        <p>To use our services, you must:</p>
         <ul>
-          <li>You must be at least 18 years old to create an account.</li>
-          <li>Keep your contact and delivery details up to date.</li>
-          <li>Notify us promptly of any unauthorised use of your account.</li>
+          <li>Be at least 18 years old or have parental/guardian consent.</li>
+          <li>Provide accurate and complete information during registration.</li>
+          <li>Maintain the confidentiality of your login credentials.</li>
         </ul>
       </>
     ),
   },
   {
-    id: "products-pricing",
-    heading: "Products and Pricing",
+    id: "services",
+    heading: "Services Offered",
     body: (
       <>
+        <p>Ocare Phinas provides:</p>
         <p>
-          We aim to describe and price our products accurately. However, product availability,
-          specifications, and prices may change without notice. Where a pricing or description error
-          is identified, we reserve the right to cancel or correct affected orders.
+          <strong>A. Outright Purchase</strong>
+          <br />
+          Customers may purchase products immediately and make full payment before delivery.
         </p>
-        <p>All prices are stated in Nigerian Naira (₦) and are inclusive of applicable charges unless stated otherwise.</p>
+        <p>
+          <strong>B. Solo Savings Plan</strong>
+          <br />
+          Customers may select a product and make flexible contributions toward the purchase price.
+        </p>
+        <p>
+          <strong>C. Group Savings Plan</strong>
+          <br />
+          Customers may join a group-based contribution plan where members contribute according to
+          the agreed schedule and become eligible for product allocation based on the applicable
+          group rules.
+        </p>
       </>
-    ),
-  },
-  {
-    id: "orders",
-    heading: "Orders",
-    body: (
-      <p>
-        Placing an order constitutes an offer to purchase. An order is confirmed only after we
-        verify your payment. We reserve the right to refuse or cancel any order, including where the
-        product is unavailable, payment cannot be verified, or we suspect fraudulent activity.
-      </p>
     ),
   },
   {
     id: "payments",
-    heading: "Payments and Confirmation",
+    heading: "Payments",
     body: (
       <>
+        <p>Payments may be made through approved payment methods displayed on the platform.</p>
+        <p>All payments are subject to verification and approval.</p>
+        <p>Ocare Phinas reserves the right to reject suspicious, incomplete, or unverifiable payments.</p>
+      </>
+    ),
+  },
+  {
+    id: "wallet",
+    heading: "Wallet System",
+    body: (
+      <>
+        <p>Approved deposits may be reflected in a customer&apos;s wallet balance.</p>
         <p>
-          We accept payment by <strong>bank transfer</strong>. To complete a purchase:
-        </p>
-        <ul>
-          <li>Transfer the exact amount to the account details provided.</li>
-          <li>Include your order reference in the transfer narration.</li>
-          <li>Send your payment screenshot to us on WhatsApp for confirmation.</li>
-        </ul>
-        <p>
-          Payments are confirmed <strong>manually</strong>, usually within 2 hours on business days.
-          Stock is reserved and dispatched only after payment is confirmed.
+          Wallet balances are intended solely for transactions within the Ocare Phinas platform and
+          may not be transferable unless expressly approved by management.
         </p>
       </>
     ),
   },
   {
-    id: "plans",
-    heading: "Pay Small Small & Contribution Plans",
+    id: "pricing",
+    heading: "Product Pricing",
     body: (
       <>
         <p>
-          Our Pay Small Small options let you save gradually through contribution groups or personal
-          payment plans towards a product or purchase milestone. Participation is entirely optional —
-          you can shop normally without a plan.
+          Product prices may change without prior notice due to market fluctuations, exchange rates,
+          supplier pricing, or availability.
         </p>
-        <ul>
-          <li>Plan terms, contribution amounts, and durations are shown when you join.</li>
-          <li>Contributions must be made according to the agreed schedule.</li>
-          <li>Products are released upon completion of the plan and verification of contributions.</li>
-          <li>Specific refund and withdrawal conditions for plans are communicated at sign-up.</li>
-        </ul>
+        <p>Customers may be required to cover any difference in product cost where applicable.</p>
       </>
     ),
   },
   {
     id: "delivery",
-    heading: "Delivery",
+    heading: "Delivery Policy",
+    body: (
+      <>
+        <p>Products will be delivered according to the applicable plan conditions.</p>
+        <p>Delivery timelines may vary depending on stock availability, logistics, and payment status.</p>
+        <p>Ocare Phinas shall not be liable for delays caused by circumstances beyond its control.</p>
+      </>
+    ),
+  },
+  {
+    id: "responsibilities",
+    heading: "User Responsibilities",
+    body: (
+      <>
+        <p>Customers agree not to:</p>
+        <ul>
+          <li>Provide false information.</li>
+          <li>Upload fraudulent payment receipts.</li>
+          <li>Abuse the platform.</li>
+          <li>Engage in activities that disrupt services.</li>
+        </ul>
+        <p>Violation may result in suspension or account termination.</p>
+      </>
+    ),
+  },
+  {
+    id: "suspension",
+    heading: "Suspension and Termination",
     body: (
       <p>
-        We deliver to the address you provide at checkout. Delivery timelines are estimates and may
-        vary by location and product availability. Please ensure someone is available to receive and
-        verify your order. Risk in the goods passes to you upon delivery.
+        Ocare Phinas reserves the right to suspend or terminate accounts involved in fraud, abuse,
+        misrepresentation, or violations of these Terms.
       </p>
-    ),
-  },
-  {
-    id: "returns",
-    heading: "Returns and Refunds",
-    body: (
-      <>
-        <p>
-          If a product arrives damaged, defective, or materially different from what you ordered,
-          contact us promptly so we can resolve the issue. Eligible returns may be repaired,
-          replaced, or refunded at our discretion and in line with applicable consumer protection
-          laws.
-        </p>
-        <p>Items must be returned in their original condition and packaging where possible.</p>
-      </>
-    ),
-  },
-  {
-    id: "conduct",
-    heading: "Acceptable Use",
-    body: (
-      <>
-        <p>You agree not to:</p>
-        <ul>
-          <li>Use our services for any unlawful or fraudulent purpose.</li>
-          <li>Provide false information or impersonate another person.</li>
-          <li>Interfere with the security or proper functioning of the platform.</li>
-        </ul>
-      </>
     ),
   },
   {
@@ -149,32 +145,33 @@ const sections: LegalSection[] = [
     heading: "Limitation of Liability",
     body: (
       <p>
-        To the fullest extent permitted by law, OCare Phinas shall not be liable for any indirect,
-        incidental, or consequential losses arising from your use of our services. Our total
-        liability for any claim is limited to the amount you paid for the product or plan giving
-        rise to the claim.
+        Ocare Phinas shall not be liable for indirect, incidental, consequential, or special damages
+        arising from use of the platform.
       </p>
     ),
   },
   {
-    id: "changes",
-    heading: "Changes to These Terms",
+    id: "amendments",
+    heading: "Amendments",
     body: (
-      <p>
-        We may update these Terms from time to time. The &quot;Last updated&quot; date above
-        reflects the latest version. Continued use of our services after changes take effect means
-        you accept the revised Terms.
-      </p>
+      <>
+        <p>These Terms may be updated periodically.</p>
+        <p>Continued use of the platform constitutes acceptance of any modifications.</p>
+      </>
     ),
   },
   {
     id: "contact",
-    heading: "Contact Us",
+    heading: "Contact Information",
     body: (
-      <p>
-        Questions about these Terms? Reach us via our <a href="/contact">Contact page</a>, by email
-        at <a href="mailto:support@ocarephinas.com">support@ocarephinas.com</a>, or on WhatsApp.
-      </p>
+      <>
+        <p>
+          <strong>Ocare Phinas Integrated Services</strong>
+          <br />
+          Phone: <a href="tel:07069640753">07069640753</a>
+        </p>
+        <p>For questions regarding these Terms, please contact customer support.</p>
+      </>
     ),
   },
 ];
@@ -184,8 +181,8 @@ export default function TermsPage() {
     <LegalPage
       title="Terms & Conditions"
       breadcrumb="Terms & Conditions"
-      intro="Please read these terms carefully. They govern your use of Ocare Phinas Integrated Services, including orders, payments, contribution plans, and deliveries."
-      lastUpdated="30 May 2026"
+      intro="Please read these Terms and Conditions carefully. They govern your use of Ocare Phinas Integrated Services, including accounts, orders, payments, savings plans, and deliveries."
+      lastUpdated="4 June 2026"
       sections={sections}
     />
   );

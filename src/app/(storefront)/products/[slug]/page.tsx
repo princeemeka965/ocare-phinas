@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import { toast } from "@/store/toastStore";
 import { ProductCard } from "@/components/storefront/product-card";
-import { planMath, isGroupEligible, groupSlotsForPrice, dailyForSlots, naira } from "@/lib/pay-small-small";
+import { isGroupEligible, groupSlotsForPrice, dailyForSlots, naira } from "@/lib/pay-small-small";
 
 /* ------------------------------------------------------------------ */
 /* Mock product data — replace with server fetch in Phase 3            */
@@ -91,9 +91,8 @@ export default function ProductDetailPage() {
   const lowStock = product.stockQuantity > 0 && product.stockQuantity <= 5;
   const imageCount = product.images.length;
 
-  /* Pay Small Small — slot engine (locked rules in src/lib/pay-small-small.ts).
-     Solo & Outright have no price cap; Group only for items ≤ ₦100,000. */
-  const pss = planMath(product.price);
+  /* Pay Small Small — Solo & Outright have no price cap; Group only for items ≤ ₦100,000.
+     Solo is flexible (any amount, daily/weekly/monthly); Group uses the slot pool. */
   const groupEligible = isGroupEligible(product.price);
   const groupSlots = groupSlotsForPrice(product.price);
   const groupDaily = dailyForSlots(groupSlots);
@@ -240,9 +239,8 @@ export default function ProductDetailPage() {
 
               <p className="text-body-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
                 <Wallet className="size-4 text-accent-foreground" />
-                Or pay{" "}
-                <strong className="text-foreground">{naira(pss.daily)}/day</strong> with Pay Small Small
-                {" "}({pss.slots} slot{pss.slots !== 1 ? "s" : ""})
+                Or spread the cost with{" "}
+                <strong className="text-foreground">Pay Small Small</strong> — daily, weekly or monthly
               </p>
 
               {lowStock && (
@@ -327,14 +325,14 @@ export default function ProductDetailPage() {
                   <div className="flex-1">
                     <p className="text-body-sm font-semibold">Solo Plan</p>
                     <p className="text-caption text-muted-foreground">
-                      {naira(pss.daily)}/day · {pss.slots} slot{pss.slots !== 1 ? "s" : ""} · delivered at 50%
+                      Pay daily, weekly or monthly · delivered at 50%
                     </p>
                   </div>
                   <ChevronRight className="size-4 text-muted-foreground flex-shrink-0" />
                 </div>
                 <p className="text-caption text-muted-foreground flex items-center gap-1.5 pl-11">
                   <Truck className="size-3.5 text-primary" />
-                  Get it in ~{pss.daysToDelivery} days, then finish the balance
+                  Choose your amount and pace; we deliver at 50%, then you finish the balance
                 </p>
               </Link>
 

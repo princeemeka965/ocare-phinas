@@ -350,6 +350,14 @@ function JoinGroupConfirmInner() {
         <Button size="lg" className="w-full gap-2" onClick={() => setStep("done")}>
           <Users className="size-5" /> Join {group.reference}
         </Button>
+
+        <p className="text-caption text-muted-foreground text-center mt-3">
+          By joining you agree to the{" "}
+          <Link href="/pay-small-small/group-terms" className="text-primary underline underline-offset-2">
+            Group Savings Plan Terms &amp; Conditions
+          </Link>
+          .
+        </p>
       </Container>
     </div>
   );

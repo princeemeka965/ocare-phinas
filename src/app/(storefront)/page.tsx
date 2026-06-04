@@ -31,6 +31,7 @@ import {
 } from "@/components/storefront/product-card";
 import { HeroSection } from "@/components/storefront/hero-section";
 import { BrandLogo } from "@/components/storefront/brand-logo";
+import { CategoryImage } from "@/components/storefront/category-image";
 import { BRANDS, brandHref } from "@/lib/brands";
 
 export const metadata: Metadata = {
@@ -157,15 +158,15 @@ const FEATURED_PRODUCTS: ProductCardData[] = [
 ];
 
 const CATEGORIES = [
-  { name: "Phones", slug: "phones", icon: Smartphone, color: "text-cyan-500" },
-  { name: "Laptops", slug: "laptops", icon: Laptop, color: "text-blue-500" },
-  { name: "Tablets", slug: "tablets", icon: TabletSmartphone, color: "text-emerald-500" },
-  { name: "Audio", slug: "audio", icon: Headphones, color: "text-purple-500" },
-  { name: "Appliances", slug: "appliances", icon: Tv, color: "text-orange-500" },
-  { name: "Accessories", slug: "accessories", icon: Cable, color: "text-rose-500" },
-  { name: "Gaming", slug: "gaming", icon: Gamepad2, color: "text-red-500" },
-  { name: "Cameras", slug: "cameras", icon: Camera, color: "text-slate-500" },
-  { name: "Pre-owned (Tokunbo)", slug: "pre-owned", icon: RefreshCw, color: "text-amber-500" },
+  { name: "Phones", slug: "phones", icon: Smartphone, image: "/categories/phones.png", color: "text-cyan-500" },
+  { name: "Laptops", slug: "laptops", icon: Laptop, image: "/categories/laptops.png", color: "text-blue-500" },
+  { name: "Tablets", slug: "tablets", icon: TabletSmartphone, image: "/categories/tablets.png", color: "text-emerald-500" },
+  { name: "Audio", slug: "audio", icon: Headphones, image: "/categories/audio.png", color: "text-purple-500" },
+  { name: "Appliances", slug: "appliances", icon: Tv, image: "/categories/appliances.png", color: "text-orange-500" },
+  { name: "Accessories", slug: "accessories", icon: Cable, image: "/categories/accessories.png", color: "text-rose-500" },
+  { name: "Gaming", slug: "gaming", icon: Gamepad2, image: "/categories/gaming.png", color: "text-red-500" },
+  { name: "Cameras", slug: "cameras", icon: Camera, image: "/categories/cameras.png", color: "text-slate-500" },
+  { name: "Pre-owned (Tokunbo)", slug: "pre-owned", icon: RefreshCw, image: "/categories/pre-owned.png", color: "text-amber-500" },
 ];
 
 /* Curated brand strip for the homepage — full catalog lives in @/lib/brands */
@@ -279,8 +280,8 @@ function PaySmallSmallPromo() {
               </span>
             </h2>
             <p className="text-body-lg text-white/80 mb-8 max-w-[42ch] mx-auto lg:mx-0">
-              Pick any item and pay ₦1,000 a day per slot. Solo plans deliver at 50% with no price cap;
-              groups cover items up to ₦100,000. No interest, no withdrawals.
+              Pick any item. On a solo plan, pay any amount daily, weekly or monthly — delivered at 50%,
+              no price cap. Groups cover items up to ₦100,000. No interest, no withdrawals.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link
@@ -355,7 +356,7 @@ function CategoryTiles() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
           {CATEGORIES.map((cat) => {
             const Icon = cat.icon;
             const isPreowned = cat.slug === "pre-owned";
@@ -364,29 +365,29 @@ function CategoryTiles() {
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
                 className={cn(
-                  "group flex flex-col items-center gap-2.5 rounded-2xl border p-3 sm:p-4 hover:-translate-y-1 hover:shadow-md transition-all duration-250",
+                  "group flex flex-col items-center gap-3 rounded-2xl border p-4 sm:p-6 hover:-translate-y-1 hover:shadow-md transition-all duration-250",
                   isPreowned
                     ? "border-accent/30 bg-accent/5 hover:border-accent/50 hover:bg-accent/10"
                     : "border-border bg-card hover:border-primary/40 hover:bg-primary/5",
                 )}
               >
-                <div
-                  className={cn(
-                    "flex size-10 sm:size-12 items-center justify-center rounded-xl transition-colors duration-250",
-                    isPreowned
-                      ? "bg-accent/10 group-hover:bg-accent/20"
-                      : "bg-muted group-hover:bg-primary/10",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "size-5 sm:size-6 transition-transform duration-300 group-hover:scale-110",
-                      cat.color,
-                    )}
-                    aria-hidden
+                <div className="flex h-12 w-full items-center justify-center">
+                  <CategoryImage
+                    src={cat.image}
+                    alt={cat.name}
+                    imgClassName="max-h-full w-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                    fallback={
+                      <Icon
+                        className={cn(
+                          "size-10 sm:size-12 transition-transform duration-300 group-hover:scale-110",
+                          cat.color,
+                        )}
+                        aria-hidden
+                      />
+                    }
                   />
                 </div>
-                <span className="text-micro font-semibold text-center leading-tight">
+                <span className="text-body-sm sm:text-body font-semibold text-center leading-tight">
                   {cat.name}
                 </span>
               </Link>
@@ -428,28 +429,22 @@ function BrandStrip() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 sm:gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-10 gap-2 sm:gap-3">
           {STRIP_BRANDS.map((brand) => (
             <Link
               key={brand.slug}
               href={brandHref(brand.name)}
-              className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 aspect-square p-3"
+              className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 aspect-square p-2.5"
             >
-              <div
-                className={cn(
-                  "flex h-10 w-full sm:h-12 items-center justify-center rounded-lg p-1.5 transition-colors",
-                  brand.darkChip
-                    ? "bg-neutral-800"
-                    : "bg-muted group-hover:bg-primary/10",
-                )}
-              >
+              <div className="flex h-12 w-full sm:h-12 items-center justify-center">
                 <BrandLogo
                   name={brand.name}
                   logoSlug={brand.logoSlug}
                   logoUrl={brand.logoUrl}
+                  logoUrlDark={brand.logoUrlDark}
                   invertOnDark={brand.invertOnDark}
-                  imgClassName="h-7 sm:h-9 w-auto max-w-full"
-                  textClassName="text-body-sm sm:text-body font-bold text-foreground/70 group-hover:text-primary transition-colors"
+                  imgClassName="max-h-full w-full max-w-full"
+                  textClassName="text-body font-bold text-foreground/70 group-hover:text-primary transition-colors"
                 />
               </div>
               <span className="text-micro font-medium text-muted-foreground group-hover:text-foreground transition-colors text-center leading-tight">

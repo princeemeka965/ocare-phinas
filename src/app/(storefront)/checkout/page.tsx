@@ -34,14 +34,17 @@ import { toast } from "@/store/toastStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import {
   soloPlanMath,
-  dailyForPrice,
   dailyForSlots,
   groupSlotsForPrice,
   isGroupEligible,
   GROUP_PRICE_CAP,
-  SOLO_MIN_DAILY,
+  suggestedSoloAmount,
+  SOLO_FREQUENCIES,
+  type SoloFrequency,
   naira,
 } from "@/lib/pay-small-small";
+
+const FREQUENCY_ORDER: SoloFrequency[] = ["daily", "weekly", "monthly"];
 
 /* Nigerian states — delivery fees are mocked here; in Phase 3 they come from Settings (B10). */
 const NG_STATES = [
@@ -74,7 +77,8 @@ export default function CheckoutPage() {
   const user = useUserStore((s) => s.user);
 
   const [plan, setPlan] = useState<PayPlan>("outright");
-  const [soloDaily, setSoloDaily] = useState("");
+  const [soloFreq, setSoloFreq] = useState<SoloFrequency>("daily");
+  const [soloAmount, setSoloAmount] = useState("");
   const [method, setMethod] = useState<"delivery" | "pickup">("delivery");
   const [state, setState] = useState("");
   const [loading, setLoading] = useState(false);
@@ -124,21 +128,28 @@ export default function CheckoutPage() {
   const total = subtotal + (deliveryFee ?? 0);
 
   /* ----------------------- Plan derivations ----------------------- */
-  /* Solo — any daily amount the customer chooses (no slot lock). */
-  const soloDailyNum = Number(soloDaily);
-  const soloValid = soloDailyNum >= SOLO_MIN_DAILY && soloDailyNum <= subtotal;
+  /* Solo — the customer chooses how much AND how often (daily/weekly/monthly). */
+  const soloMeta = SOLO_FREQUENCIES[soloFreq];
+  const soloAmountNum = Number(soloAmount);
+  const soloValid = soloAmountNum >= soloMeta.min && soloAmountNum <= subtotal;
   const soloMath =
-    plan === "solo" && soloDailyNum > 0 ? soloPlanMath(subtotal, soloDailyNum) : null;
+    plan === "solo" && soloAmountNum > 0 ? soloPlanMath(subtotal, soloAmountNum, soloFreq) : null;
 
   /* Group — shared slot pool; only for carts worth ₦100,000 or less. */
   const groupEligible = isGroupEligible(subtotal);
   const groupSlots = groupSlotsForPrice(subtotal);
   const groupDaily = dailyForSlots(groupSlots);
 
-  /* Pick a payment plan, seeding the solo daily with the slot suggestion. */
+  /* Pick a payment plan, seeding the solo amount with a suggestion. */
   function choosePlan(next: PayPlan) {
     setPlan(next);
-    if (next === "solo" && !soloDaily) setSoloDaily(String(dailyForPrice(subtotal)));
+    if (next === "solo" && !soloAmount) setSoloAmount(String(suggestedSoloAmount(subtotal, soloFreq)));
+  }
+
+  /* Switching frequency re-seeds the amount with that period's suggestion. */
+  function chooseSoloFreq(next: SoloFrequency) {
+    setSoloFreq(next);
+    setSoloAmount(String(suggestedSoloAmount(subtotal, next)));
   }
 
   const submitDisabled =
@@ -171,7 +182,7 @@ export default function CheckoutPage() {
     }
 
     if (plan === "solo" && !soloValid)
-      next.soloDaily = `Enter a daily amount between ${naira(SOLO_MIN_DAILY)} and ${naira(subtotal)}.`;
+      next.soloAmount = `Enter an amount between ${naira(soloMeta.min)} and ${naira(subtotal)}.`;
     if (plan === "group" && !groupEligible)
       next.plan = `Group plans are only for carts of ${naira(GROUP_PRICE_CAP)} or less.`;
 
@@ -192,7 +203,7 @@ export default function CheckoutPage() {
       clearCart();
       toast.success(
         plan === "solo"
-          ? "Solo plan started — track your daily payments on My Plan."
+          ? "Solo plan started — track your payments on My Plan."
           : "Group plan started — track your slots on My Plan.",
       );
       router.push("/pay-small-small/my-plan");
@@ -268,46 +279,80 @@ export default function CheckoutPage() {
               <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
                 <h2 className="text-h3 font-bold">Your solo plan</h2>
                 <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4">
-                  <FormField
-                    label="Choose your daily payment"
-                    htmlFor="soloDaily"
-                    error={errors.soloDaily}
-                    hint={`Per day — minimum ${naira(SOLO_MIN_DAILY)}. You decide the pace.`}
-                  >
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-bold text-primary">₦</span>
-                      <Input
-                        id="soloDaily"
-                        name="soloDaily"
-                        type="number"
-                        inputMode="numeric"
-                        min={SOLO_MIN_DAILY}
-                        max={subtotal}
-                        step={100}
-                        value={soloDaily}
-                        onChange={(e) => setSoloDaily(e.target.value)}
-                        placeholder="1,000"
-                        className="pl-8 font-bold"
-                        aria-invalid={!!errors.soloDaily}
-                      />
-                    </div>
-                  </FormField>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {[1000, 2000, 5000, 10000].map((amt) => (
+                  {/* When — frequency */}
+                  <p className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
+                    How often will you pay?
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {FREQUENCY_ORDER.map((f) => (
                       <button
-                        key={amt}
+                        key={f}
                         type="button"
-                        onClick={() => setSoloDaily(String(amt))}
+                        onClick={() => chooseSoloFreq(f)}
+                        aria-pressed={soloFreq === f}
                         className={cn(
-                          "rounded-full border px-3 py-1 text-caption font-semibold transition-colors",
-                          soloDailyNum === amt
+                          "rounded-xl border px-3 py-2 text-body-sm font-semibold transition-colors",
+                          soloFreq === f
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-background text-muted-foreground hover:border-primary/40",
                         )}
                       >
-                        {naira(amt)}/day
+                        {SOLO_FREQUENCIES[f].label}
                       </button>
                     ))}
+                  </div>
+
+                  {/* How much — amount per payment */}
+                  <div className="mt-4">
+                    <FormField
+                      label={`How much per ${soloMeta.unit}?`}
+                      htmlFor="soloAmount"
+                      error={errors.soloAmount}
+                      hint={`Per ${soloMeta.unit} — minimum ${naira(soloMeta.min)}. You decide the pace.`}
+                    >
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-bold text-primary">₦</span>
+                        <Input
+                          id="soloAmount"
+                          name="soloAmount"
+                          type="number"
+                          inputMode="numeric"
+                          min={soloMeta.min}
+                          max={subtotal}
+                          step={100}
+                          value={soloAmount}
+                          onChange={(e) => setSoloAmount(e.target.value)}
+                          placeholder={String(suggestedSoloAmount(subtotal, soloFreq))}
+                          className="pl-8 pr-16 font-bold"
+                          aria-invalid={!!errors.soloAmount}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-caption font-medium text-muted-foreground">
+                          {soloMeta.per}
+                        </span>
+                      </div>
+                    </FormField>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {[1, 2, 5, 10].map((mult) => {
+                      const amt = 1000 * soloMeta.days * mult;
+                      return (
+                        <button
+                          key={mult}
+                          type="button"
+                          onClick={() => setSoloAmount(String(amt))}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-caption font-semibold transition-colors",
+                            soloAmountNum === amt
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background text-muted-foreground hover:border-primary/40",
+                          )}
+                        >
+                          {naira(amt)}
+                          {soloMeta.per}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -315,13 +360,20 @@ export default function CheckoutPage() {
                   <div className="flex items-start gap-2 rounded-xl bg-muted/50 border border-border p-3 text-caption">
                     <Truck className="size-4 text-primary flex-shrink-0 mt-0.5" />
                     <span className="text-muted-foreground">
-                      Pay {naira(soloMath.daily)} a day. We deliver once you&apos;ve paid{" "}
+                      Pay {naira(soloMath.amount)} a {soloMeta.unit}. We deliver once you&apos;ve paid{" "}
                       <span className="font-semibold text-foreground">{naira(soloMath.deliveryTarget)}</span> (50%) —
-                      about <span className="font-semibold text-foreground">{soloMath.daysToDelivery} days</span> in —
-                      then you finish the balance over {soloMath.daysToComplete} days total.
+                      about <span className="font-semibold text-foreground">{soloMath.paymentsToDelivery} {soloMeta.unit}{soloMath.paymentsToDelivery !== 1 ? "s" : ""}</span> in —
+                      then you finish the balance over {soloMath.paymentsToComplete} {soloMeta.unit}{soloMath.paymentsToComplete !== 1 ? "s" : ""} total.
                     </span>
                   </div>
                 )}
+                <p className="text-caption text-muted-foreground">
+                  By starting a plan you agree to the{" "}
+                  <Link href="/pay-small-small/solo-terms" className="text-primary underline underline-offset-2">
+                    Solo Plan Terms &amp; Conditions
+                  </Link>
+                  .
+                </p>
               </section>
             )}
 
@@ -349,6 +401,13 @@ export default function CheckoutPage() {
                     We&apos;ll place you in the next open group and confirm your position on My Plan.
                   </span>
                 </div>
+                <p className="text-caption text-muted-foreground">
+                  By starting a plan you agree to the{" "}
+                  <Link href="/pay-small-small/group-terms" className="text-primary underline underline-offset-2">
+                    Group Savings Plan Terms &amp; Conditions
+                  </Link>
+                  .
+                </p>
               </section>
             )}
 
@@ -600,13 +659,13 @@ export default function CheckoutPage() {
                     <span className="text-primary">
                       {plan === "solo"
                         ? soloValid
-                          ? `${naira(soloMath!.daily)}/day`
+                          ? `${naira(soloMath!.amount)}${soloMeta.per}`
                           : "Set amount"
                         : `${naira(groupDaily)}/day`}
                     </span>
                   </div>
                   <p className="text-caption text-muted-foreground">
-                    No payment is taken now — your first daily payment starts your plan. Money paid in
+                    No payment is taken now — your first payment starts your plan. Money paid in
                     can only ever become a product; there are no withdrawals.
                   </p>
                 </div>

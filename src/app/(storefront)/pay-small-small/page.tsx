@@ -8,20 +8,20 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Pay Small Small — OCare Phinas",
-  description: "Own any item by paying ₦1,000 a day per slot. Start a solo plan (no price cap) or join a group for items up to ₦100,000. No interest, no withdrawals — your money only ever becomes a product.",
+  description: "Own any item with Pay Small Small. Start a solo plan — pay any amount daily, weekly or monthly, with no price cap — or join a group for items up to ₦100,000. No interest, no withdrawals — your money only ever becomes a product.",
 };
 
 const HOW_IT_WORKS = [
-  { step: "1", title: "Pick your item", body: "Choose anything you want. We work out the slots: price ÷ ₦50,000, rounded up." },
-  { step: "2", title: "Pay ₦1,000 per slot, daily", body: "Each slot is ₦1,000 a day for 50 days. The daily amount is fixed — no paying ahead, no guesswork." },
-  { step: "3", title: "Pay & we track", body: "Transfer each day's amount to our bank and send your screenshot on WhatsApp. We confirm and update your ledger." },
+  { step: "1", title: "Pick your item", body: "Choose anything you want, at its real price. Solo plans have no price cap; groups cover items up to ₦100,000." },
+  { step: "2", title: "Choose how you pay", body: "On a solo plan, pick any amount and pay it daily, weekly or monthly — at your own pace. In a group, take 1 or 2 slots at ₦1,000 a day." },
+  { step: "3", title: "Pay & we track", body: "Transfer each payment to our bank and send your screenshot on WhatsApp. We confirm and update your ledger." },
   { step: "4", title: "Get your item", body: "Solo plans deliver at 50%, then you finish the balance. Group items arrive in position order as funds build." },
 ];
 
 const FAQS = [
   {
     q: "How much do I pay, and how often?",
-    a: "It's worked out from the price. One slot is ₦1,000 every day; the number of slots is the price divided by ₦50,000, rounded up (so a ₦120,000 item is 3 slots = ₦3,000/day). You pay exactly that daily amount — there's no paying ahead.",
+    a: "On a solo plan it's entirely up to you — choose any amount and pay it daily, weekly or monthly, at your own pace. Pay more to finish faster, or keep it gentle. Group plans work differently: items up to ₦100,000 are split into 1 or 2 slots of ₦1,000 a day.",
   },
   {
     q: "When do I get my item?",
@@ -33,11 +33,11 @@ const FAQS = [
   },
   {
     q: "What happens if I miss a payment?",
-    a: "Missing a day just pauses your progress — there are no penalties or late fees. Continue when you can. We encourage consistency, but life happens.",
+    a: "Missing a payment just pauses your progress — there are no penalties or late fees. Continue when you can. We encourage consistency, but life happens.",
   },
   {
     q: "What's the difference between a solo plan and a group plan?",
-    a: "A solo plan is just you, with no price cap — pick any item and pay ₦1,000 per slot daily, delivered at 50%. A group plan is a shared slot pool for items up to ₦100,000 (1 or 2 slots each), where members receive their item in position order. You can run several plans at once.",
+    a: "A solo plan is just you, with no price cap — pick any item and choose how you pay: any amount, daily, weekly or monthly, delivered at 50%. A group plan is a shared slot pool for items up to ₦100,000 (1 or 2 slots each), where members receive their item in position order. You can run several plans at once.",
   },
   {
     q: "Is this mandatory to shop?",
@@ -73,7 +73,7 @@ export default function PSSLandingPage() {
             </span>
           </h1>
           <p className="text-body-lg text-white/80 mb-10 max-w-[46ch] mx-auto">
-            Pick any item and pay ₦1,000 a day per slot. Solo plans deliver at 50% with no price cap; groups cover items up to ₦100,000. No interest, no withdrawals.
+            Pick any item. On a solo plan, pay any amount daily, weekly or monthly — delivered at 50%, with no price cap. Groups cover items up to ₦100,000. No interest, no withdrawals.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -133,10 +133,10 @@ export default function PSSLandingPage() {
               </div>
               <h3 className="text-h3 font-bold mb-2">Solo Plan</h3>
               <p className="text-body-sm text-muted-foreground mb-5 flex-1">
-                Own anything, just you — no price cap. Pick an item and pay ₦1,000 per slot every day (slots = price ÷ ₦50,000, rounded up). We deliver once you reach the halfway mark, then you finish the balance.
+                Own anything, just you — no price cap. Pick an item and choose how you pay: any amount, daily, weekly or monthly. We deliver once you reach the halfway mark, then you finish the balance.
               </p>
               <ul className="space-y-2 mb-6">
-                {["Any item, no price cap", "₦1,000 per slot, daily", "Delivered at 50% paid", "Run several plans at once"].map((f) => (
+                {["Any item, no price cap", "Pay daily, weekly or monthly", "Delivered at 50% paid", "Run several plans at once"].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-body-sm">
                     <CheckCircle className="size-4 text-primary flex-shrink-0" />
                     {f}
@@ -145,6 +145,12 @@ export default function PSSLandingPage() {
               </ul>
               <Link href="/pay-small-small/solo" className={cn(buttonVariants(), "w-full gap-2 justify-center")}>
                 <User className="size-4" /> Start a Solo Plan
+              </Link>
+              <Link
+                href="/pay-small-small/solo-terms"
+                className="mt-3 text-center text-caption text-muted-foreground hover:text-primary transition-colors"
+              >
+                View Solo Plan terms
               </Link>
             </div>
 
@@ -167,6 +173,12 @@ export default function PSSLandingPage() {
               </ul>
               <Link href="/pay-small-small/join" className={cn(buttonVariants({ variant: "outline" }), "w-full gap-2 justify-center")}>
                 <Users className="size-4" /> Join a Group
+              </Link>
+              <Link
+                href="/pay-small-small/group-terms"
+                className="mt-3 text-center text-caption text-muted-foreground hover:text-primary transition-colors"
+              >
+                View Group Plan terms
               </Link>
             </div>
           </div>

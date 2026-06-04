@@ -18,6 +18,7 @@ export function BrandLogo({
   imgClassName,
   textClassName,
   logoUrl,
+  logoUrlDark,
   invertOnDark,
 }: {
   name: string;
@@ -25,18 +26,46 @@ export function BrandLogo({
   imgClassName?: string;
   textClassName?: string;
   logoUrl?: string;
+  /** Separate artwork to use in dark mode — for multi-colour logos that can't simply be inverted. */
+  logoUrlDark?: string;
   /** Invert the logo in dark mode — for single-color (black) logos that need to flip to white. */
   invertOnDark?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
 
-  if ((logoSlug || logoUrl) && !failed) {
+  const src = logoUrl || (logoSlug ? `https://cdn.simpleicons.org/${logoSlug}` : undefined);
+
+  if (src && !failed) {
+    // A dedicated dark-mode asset: swap artwork by colour scheme.
+    if (logoUrlDark) {
+      return (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`${name} logo`}
+            className={cn("object-cover dark:hidden", imgClassName)}
+            loading="lazy"
+            onError={() => setFailed(true)}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoUrlDark}
+            alt=""
+            aria-hidden
+            className={cn("hidden object-cover dark:block", imgClassName)}
+            loading="lazy"
+          />
+        </>
+      );
+    }
+
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={logoUrl || `https://cdn.simpleicons.org/${logoSlug}`}
+        src={src}
         alt={`${name} logo`}
-        className={cn("object-contain", invertOnDark && "dark:invert", imgClassName)}
+        className={cn("object-cover", invertOnDark && "dark:invert", imgClassName)}
         loading="lazy"
         onError={() => setFailed(true)}
       />

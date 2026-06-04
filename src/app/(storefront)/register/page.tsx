@@ -126,7 +126,7 @@ function RegisterForm() {
               <div>
                 <p className="text-body-sm font-medium">Join a Pay Small Small plan (optional)</p>
                 <p className="text-caption text-muted-foreground mt-0.5">
-                  Pick any item and pay ₦1,000 a day per slot, delivered at 50% on solo plans. You can always start later — shopping works normally without a plan.
+                  Pick any item and pay over time — on a solo plan choose any amount, daily, weekly or monthly, delivered at 50%. You can always start later — shopping works normally without a plan.
                 </p>
               </div>
             </label>

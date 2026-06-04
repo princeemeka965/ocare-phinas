@@ -23,6 +23,8 @@ const pssLinks = [
   { label: "Start a Solo Plan", href: "/pay-small-small/solo" },
   { label: "Join a Group", href: "/pay-small-small/join" },
   { label: "My Plan", href: "/pay-small-small/my-plan" },
+  { label: "Solo Plan Terms", href: "/pay-small-small/solo-terms" },
+  { label: "Group Plan Terms", href: "/pay-small-small/group-terms" },
 ];
 
 
@@ -41,15 +43,15 @@ export function StorefrontFooter() {
             </p>
             <div className="flex flex-col gap-2">
               <a
-                href="tel:+2340000000000"
+                href="tel:+2347069640753"
                 className="inline-flex items-center gap-2 text-caption text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Phone className="size-3.5 shrink-0" />
-                <span>+234 000 000 0000</span>
+                <span>+234 706 964 0753</span>
               </a>
               {/* Payment WhatsApp — from Settings in Phase 3 */}
               <a
-                href="https://wa.me/2340000000000"
+                href="https://wa.me/2347069640753"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#25D366] px-3 py-1.5 text-caption font-medium text-white hover:bg-[#1eb85a] transition-colors"
@@ -82,7 +84,7 @@ export function StorefrontFooter() {
           <div>
             <h2 className="text-body-sm font-semibold mb-3">Pay Small Small</h2>
             <p className="text-caption text-muted-foreground mb-3">
-              Own any gadget by paying ₦1,000 a day per slot. Delivered at 50% on solo plans. No interest, no withdrawals.
+              Own any gadget with Pay Small Small — on a solo plan pay any amount daily, weekly or monthly, delivered at 50%. No interest, no withdrawals.
             </p>
             <ul className="space-y-2">
               {pssLinks.map((link) => (
@@ -148,6 +150,12 @@ export function StorefrontFooter() {
               className="text-caption text-muted-foreground hover:text-foreground transition-colors"
             >
               Terms of Service
+            </Link>
+            <Link
+              href="/warranty"
+              className="text-caption text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Warranty Policy
             </Link>
           </div>
         </div>
