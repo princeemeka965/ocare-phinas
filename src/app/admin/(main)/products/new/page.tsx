@@ -54,7 +54,9 @@ export default function NewProductPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className={labelClass}>Price (₦) *</label><input type="number" required min={0} placeholder="65990" className={inputClass} /></div>
             <div><label className={labelClass}>Stock quantity *</label><input type="number" required min={0} placeholder="10" className={inputClass} /></div>
+            <div><label className={labelClass}>Delivery fee (₦) *</label><input type="number" required min={0} defaultValue={0} placeholder="2500" className={inputClass} /></div>
           </div>
+          <p className="text-caption text-muted-foreground -mt-1">Set per product. Use 0 for free delivery.</p>
           <label className="flex items-center gap-2.5 cursor-pointer"><input type="checkbox" defaultChecked className="rounded border-input text-primary" /><span className="text-body-sm font-medium">Active (visible to customers)</span></label>
         </div>
 

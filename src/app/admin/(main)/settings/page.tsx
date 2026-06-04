@@ -47,7 +47,6 @@ export default function AdminSettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className={labelClass}>Store name</label><input type="text" defaultValue="OCare Phinas" className={inputClass} /></div>
             <div><label className={labelClass}>Phone number</label><input type="text" defaultValue="+2340000000000" className={inputClass} /></div>
-            <div><label className={labelClass}>Delivery fee (₦)</label><input type="number" defaultValue={2500} min={0} className={inputClass} /></div>
             <div><label className={labelClass}>SMS sender ID</label><input type="text" defaultValue="OCAREPH" maxLength={11} className={inputClass} /></div>
           </div>
         </div>

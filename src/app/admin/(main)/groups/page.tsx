@@ -1,15 +1,13 @@
 import type { Metadata } from "next";
-import { Plus, Users, Lock } from "lucide-react";
+import { Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Groups — OCare Phinas Admin" };
 
 const MOCK_GROUPS = [
   { id: "1", ref: "G-017", slotsFilled: 3, totalSlots: 10, status: "open" as const, startDate: "2026-06-01" },
-  { id: "2", ref: "G-016", slotsFilled: 8, totalSlots: 10, status: "open" as const, startDate: "2026-05-20" },
+  { id: "2", ref: "G-016", slotsFilled: 10, totalSlots: 10, status: "closed" as const, startDate: "2026-05-20" },
   { id: "3", ref: "G-015", slotsFilled: 10, totalSlots: 10, status: "closed" as const, startDate: "2026-05-01" },
   { id: "4", ref: "G-014", slotsFilled: 10, totalSlots: 10, status: "completed" as const, startDate: "2026-04-01" },
 ];
@@ -23,12 +21,9 @@ const STATUS_META = {
 export default function AdminGroupsPage() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-h1 font-bold">Pay Small Small — Groups</h1>
-          <p className="text-muted-foreground mt-1">1 slot = ₦1,000/day for 50 days. Members take 1–2 slots (items ≤ ₦100,000). Groups auto-close when every slot is filled — capacity enforced server-side.</p>
-        </div>
-        <button className={cn(buttonVariants(), "gap-2")}><Plus className="size-4" /> Create group</button>
+      <div>
+        <h1 className="text-h1 font-bold">Pay Small Small — Groups</h1>
+        <p className="text-muted-foreground mt-1">1 slot = ₦1,000/day for 50 days. Members take 1–2 slots (items ≤ ₦100,000). Groups are created automatically — a new group opens once the previous one fills all 10 slots, and each group auto-closes the moment its 10th slot is taken. Creation, capacity and closing are enforced server-side.</p>
       </div>
 
       <div className="space-y-4">
@@ -50,11 +45,6 @@ export default function AdminGroupsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {group.status === "open" && (
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-body-sm hover:bg-muted transition-colors">
-                      <Lock className="size-3.5" /> Close
-                    </button>
-                  )}
                   <button className="px-3 py-1.5 rounded-lg border border-border text-body-sm hover:bg-muted transition-colors">View members</button>
                 </div>
               </div>
