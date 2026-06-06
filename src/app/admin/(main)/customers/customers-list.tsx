@@ -2,14 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Ban, CheckCircle, Eye, Search, ShieldCheck, User, Users } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle, Clock, Eye, Search, ShieldCheck, User, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toastStore";
-import type { Customer } from "@/lib/customers";
+import { planScheduleHealth, type Customer } from "@/lib/customers";
+import { HEALTH_META, isArrears, type PaymentHealthStatus } from "@/lib/payment-health";
 
 const PLAN_ICON = { solo: User, group: Users } as const;
+
+/** Worst arrears state across a customer's plans, or null if all clear. */
+function worstArrears(c: Customer): PaymentHealthStatus | null {
+  let worst: PaymentHealthStatus | null = null;
+  for (const plan of c.plans) {
+    const h = planScheduleHealth(plan);
+    if (!h || !isArrears(h.status)) continue;
+    if (h.status === "overdue") return "overdue";
+    worst = "missed";
+  }
+  return worst;
+}
 
 export function CustomersList({ customers }: { customers: Customer[] }) {
   const [query, setQuery] = useState("");
@@ -57,6 +70,7 @@ export function CustomersList({ customers }: { customers: Customer[] }) {
         <div className="space-y-3">
           {filtered.map((c) => {
             const isBlocked = blocked[c.id];
+            const arrears = worstArrears(c);
             return (
               <div
                 key={c.id}
@@ -101,6 +115,12 @@ export function CustomersList({ customers }: { customers: Customer[] }) {
                 {/* Orders + status */}
                 <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
                   <span className="text-caption text-muted-foreground"><span className="font-semibold text-foreground">{c.orderCount}</span> orders</span>
+                  {arrears && (
+                    <Badge variant={HEALTH_META[arrears].badge} className="text-micro gap-1">
+                      {arrears === "overdue" ? <AlertTriangle className="size-3" /> : <Clock className="size-3" />}
+                      {HEALTH_META[arrears].label}
+                    </Badge>
+                  )}
                   {isBlocked && <Badge variant="destructive" className="text-micro">Blocked</Badge>}
                 </div>
 

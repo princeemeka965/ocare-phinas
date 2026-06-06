@@ -33,7 +33,7 @@ const FAQS = [
   },
   {
     q: "What happens if I miss a payment?",
-    a: "Missing a payment just pauses your progress — there are no penalties or late fees. Continue when you can. We encourage consistency, but life happens.",
+    a: "We track it so it's never a surprise. Fall behind your schedule and the payment shows as 'missed' on your dashboard (and a banner reminds you of the amount); catch up any time. It matters most after a solo item is delivered at 50% — you still owe the balance, and if the agreed payment window passes with money still owed it becomes 'overdue' and shows in red. There are no hidden late fees, but please clear overdue balances to keep your account in good standing.",
   },
   {
     q: "What's the difference between a solo plan and a group plan?",

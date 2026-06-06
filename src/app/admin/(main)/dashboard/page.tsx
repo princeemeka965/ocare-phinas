@@ -1,23 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { TrendingUp, CreditCard, Wallet, AlertTriangle, Users, ShoppingBag, ArrowRight, ChevronRight } from "lucide-react";
+import { TrendingUp, CreditCard, AlertTriangle, Users, Package, ArrowRight, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { MOCK_ORDERS, STATUS_META } from "@/lib/orders";
-import { MOCK_PAYMENTS } from "@/lib/payments";
+import { arrearsAcrossCustomers } from "@/lib/customers";
+import { naira } from "@/lib/pay-small-small";
 
 export const metadata: Metadata = { title: "Dashboard — OCare Phinas Admin" };
 
 const RECENT_ORDERS = MOCK_ORDERS.slice(0, 4);
-const PENDING_PAYMENTS = MOCK_PAYMENTS.filter((p) => p.status === "awaiting").slice(0, 3);
+/* Outright orders whose manual transfer is awaiting confirmation. Plan orders
+   are confirmed period-by-period inside the order's payment record instead. */
+const AWAITING_CONFIRMATION = MOCK_ORDERS.filter((o) => o.status === "payment_submitted");
+
+const ARREARS = arrearsAcrossCustomers();
+const OVERDUE = ARREARS.filter((r) => r.health.status === "overdue");
+const MISSED = ARREARS.filter((r) => r.health.status === "missed");
+const OVERDUE_TOTAL = OVERDUE.reduce((s, r) => s + r.health.arrears, 0);
+const MISSED_TOTAL = MISSED.reduce((s, r) => s + r.health.arrears, 0);
 
 const STATS = [
   { label: "Today's sales", value: "₦142,490", sub: "+3 orders", icon: TrendingUp, color: "text-primary", bg: "bg-primary/10" },
-  { label: "Pending payments", value: "7", sub: "Awaiting confirmation", icon: CreditCard, color: "text-warning", bg: "bg-warning/10", href: "/admin/payments" },
-  { label: "Pending contributions", value: "12", sub: "Plan payments to confirm", icon: Wallet, color: "text-accent", bg: "bg-accent/10", href: "/admin/contributions" },
-  { label: "Low stock products", value: "5", sub: "Below 3 units", icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10", href: "/admin/products" },
+  { label: "Awaiting confirmation", value: String(AWAITING_CONFIRMATION.length), sub: "Order payments to confirm", icon: CreditCard, color: "text-warning", bg: "bg-warning/10", href: "/admin/orders" },
+  { label: "Overdue plans", value: String(OVERDUE.length), sub: `${naira(OVERDUE_TOTAL)} past due`, icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10", href: "/admin/arrears" },
+  { label: "Missed payments", value: String(MISSED.length), sub: `${naira(MISSED_TOTAL)} behind`, icon: AlertTriangle, color: "text-warning", bg: "bg-warning/10", href: "/admin/arrears" },
   { label: "Open groups", value: "3", sub: "Active PSS groups", icon: Users, color: "text-primary", bg: "bg-primary/10", href: "/admin/groups" },
-  { label: "Total orders", value: "248", sub: "All time", icon: ShoppingBag, color: "text-muted-foreground", bg: "bg-muted" },
+  { label: "Low stock products", value: "5", sub: "Below 3 units", icon: Package, color: "text-muted-foreground", bg: "bg-muted", href: "/admin/products" },
 ];
 
 export default function AdminDashboardPage() {
@@ -54,24 +63,28 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h2 className="text-body font-semibold">Pending Payments</h2>
-            <Link href="/admin/payments" className="flex items-center gap-1 text-caption text-primary font-medium hover:underline">
+            <h2 className="text-body font-semibold">Awaiting confirmation</h2>
+            <Link href="/admin/orders" className="flex items-center gap-1 text-caption text-primary font-medium hover:underline">
               View all <ArrowRight className="size-3.5" />
             </Link>
           </div>
           <div className="divide-y divide-border">
-            {PENDING_PAYMENTS.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 px-5 py-3.5">
-                <div className="flex-1 min-w-0">
-                  <p className="text-body-sm font-mono font-semibold">{p.orderRef}</p>
-                  <p className="text-caption text-muted-foreground">{p.customer.name} · submitted {p.submittedAt}</p>
+            {AWAITING_CONFIRMATION.length === 0 ? (
+              <p className="px-5 py-8 text-center text-body-sm text-muted-foreground">No order payments awaiting confirmation.</p>
+            ) : (
+              AWAITING_CONFIRMATION.map((o) => (
+                <div key={o.id} className="flex items-center gap-3 px-5 py-3.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body-sm font-mono font-semibold">{o.reference}</p>
+                    <p className="text-caption text-muted-foreground">{o.customer.name} · placed {o.date}</p>
+                  </div>
+                  <p className="text-body-sm font-bold text-primary flex-shrink-0">₦{o.total.toLocaleString("en-NG")}</p>
+                  <Link href={`/admin/orders/${o.id}`} className="flex-shrink-0 px-2.5 py-1 rounded-lg bg-primary text-white text-caption font-semibold hover:bg-primary/90 transition-colors">
+                    Review
+                  </Link>
                 </div>
-                <p className="text-body-sm font-bold text-primary flex-shrink-0">₦{p.amount.toLocaleString("en-NG")}</p>
-                <Link href={`/admin/payments/${p.id}`} className="flex-shrink-0 px-2.5 py-1 rounded-lg bg-primary text-white text-caption font-semibold hover:bg-primary/90 transition-colors">
-                  Review
-                </Link>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 

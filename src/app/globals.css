@@ -279,3 +279,14 @@
     background-position: calc(400px + 100%) 0;
   }
 }
+
+/* Marquee — seamless horizontal scroll for the arrears banner. The track
+   duplicates its content, so translating by -50% loops without a seam. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

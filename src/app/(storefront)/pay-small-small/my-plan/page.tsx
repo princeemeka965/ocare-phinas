@@ -5,115 +5,34 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  ExternalLink,
   Truck,
   Wallet,
   User,
   Users,
   ShoppingCart,
-  RefreshCw,
   ArrowRight,
+  AlertTriangle,
+  CalendarClock,
 } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
-import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES, type SoloFrequency } from "@/lib/pay-small-small";
-import { CycleCompletePrompt } from "./cycle-complete-prompt";
+import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
+import { HEALTH_META, arrearsSummary, isArrears, type PaymentHealth } from "@/lib/payment-health";
+import {
+  MOCK_PLANS,
+  MOCK_WALLET,
+  MOCK_CONTRIBUTIONS,
+  planHealth,
+  type PlanType,
+  type PlanStatus,
+  type ContribStatus,
+} from "@/lib/my-plans";
 
 export const metadata: Metadata = { title: "My Plan — Pay Small Small — OCare Phinas" };
 
 const BANK = { name: "OCare Phinas Nigeria Ltd", number: "0123456789", bank: "GTBank" };
 const WHATSAPP_NUMBER = "2340000000000";
-
-type PlanType = "solo" | "group" | "outright";
-type PlanStatus = "active" | "processing" | "delivered" | "completed_cycle";
-
-interface Plan {
-  id: string;
-  type: PlanType;
-  reference: string;
-  productName: string;
-  productImage: string;
-  productPrice: number;
-  slots?: number; // group only — the shared slot pool
-  frequency?: SoloFrequency; // solo only — how often the customer pays
-  daily: number; // amount paid each period
-  amountAllocated: number;
-  status: PlanStatus;
-  position?: number; // group position
-}
-
-type ContribStatus = "confirmed" | "awaiting" | "rejected";
-interface Contribution {
-  id: string;
-  date: string;
-  amount: number;
-  plan: string;
-  status: ContribStatus;
-}
-
-/* ------------------------------------------------------------------ */
-/* Mock wallet + plans — replace with authenticated fetch in Phase 3.  */
-/* One account, one wallet, many concurrent plans (payment-flow §1,§4) */
-/* Money never withdraws as cash — it only ever becomes a product.     */
-/* ------------------------------------------------------------------ */
-const MOCK_PLANS: Plan[] = [
-  {
-    id: "p1",
-    type: "solo",
-    reference: "SOLO-0042",
-    productName: "Haier Thermocool Chest Freezer 300L",
-    productImage: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=400&h=400&fit=crop&q=85",
-    productPrice: 350000,
-    frequency: "daily",
-    daily: 7000,
-    amountAllocated: 196000, // past 50% → delivered, finishing balance
-    status: "delivered",
-  },
-  {
-    id: "p2",
-    type: "group",
-    reference: "G-016",
-    productName: 'LG OLED evo C3 55" 4K Smart TV',
-    productImage: "https://images.unsplash.com/photo-1593784991095-a205069470b6?w=400&h=400&fit=crop&q=85",
-    productPrice: 89990,
-    slots: 2,
-    daily: 2000,
-    amountAllocated: 84000, // ~42/50 payments
-    status: "active",
-    position: 8,
-  },
-  {
-    id: "p3",
-    type: "group",
-    reference: "G-014",
-    productName: "Sony PlayStation 5 Slim",
-    productImage: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=400&h=400&fit=crop&q=85",
-    productPrice: 56000,
-    slots: 2,
-    daily: 2000,
-    amountAllocated: 100000, // completed a full cycle (2 slots × ₦50k)
-    status: "completed_cycle",
-    position: 3,
-  },
-];
-
-/* Wallet: total = everything paid in not yet consumed by a delivered product;
-   allocations = committed to active plans; available = uncommitted. */
-const MOCK_WALLET = {
-  total: 105000,
-  available: 5000,
-};
-
-const MOCK_CONTRIBUTIONS: Contribution[] = [
-  { id: "c1", date: "2026-06-01", amount: 7000, plan: "SOLO-0042", status: "awaiting" },
-  { id: "c2", date: "2026-06-01", amount: 2000, plan: "G-016", status: "awaiting" },
-  { id: "c3", date: "2026-05-31", amount: 7000, plan: "SOLO-0042", status: "confirmed" },
-  { id: "c4", date: "2026-05-31", amount: 2000, plan: "G-016", status: "confirmed" },
-  { id: "c5", date: "2026-05-30", amount: 7000, plan: "SOLO-0042", status: "confirmed" },
-  { id: "c6", date: "2026-05-29", amount: 2000, plan: "G-016", status: "rejected" },
-  { id: "c7", date: "2026-05-28", amount: 7000, plan: "SOLO-0042", status: "confirmed" },
-];
 
 const TYPE_META: Record<PlanType, { label: string; icon: typeof User }> = {
   solo: { label: "Solo Plan", icon: User },
@@ -125,7 +44,7 @@ const STATUS_META: Record<PlanStatus, { label: string; variant: "success" | "war
   active: { label: "Active", variant: "default" },
   processing: { label: "Processing", variant: "warning" },
   delivered: { label: "Delivered", variant: "success" },
-  completed_cycle: { label: "Completed cycle", variant: "secondary" },
+  completed: { label: "Completed", variant: "secondary" },
 };
 
 const CONTRIB_ICON: Record<ContribStatus, React.ReactNode> = {
@@ -140,6 +59,10 @@ const CONTRIB_BADGE: Record<ContribStatus, "success" | "warning" | "destructive"
   rejected: "destructive",
 };
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export default function MyPlanPage() {
   const plans = MOCK_PLANS;
   const wallet = MOCK_WALLET;
@@ -148,8 +71,15 @@ export default function MyPlanPage() {
   const groupAllocated = plans.filter((p) => p.type === "group").reduce((s, p) => s + p.amountAllocated, 0);
   const soloAllocated = plans.filter((p) => p.type === "solo").reduce((s, p) => s + p.amountAllocated, 0);
 
-  const cycleComplete = plans.find((p) => p.status === "completed_cycle");
   const confirmedCount = MOCK_CONTRIBUTIONS.filter((c) => c.status === "confirmed").length;
+
+  /* Payment health per plan, and the overall arrears headline. */
+  const healthById = new Map<string, PaymentHealth>();
+  for (const plan of plans) {
+    const h = planHealth(plan);
+    if (h) healthById.set(plan.id, h);
+  }
+  const summary = arrearsSummary([...healthById.values()]);
 
   return (
     <div className="py-8 sm:py-12">
@@ -160,6 +90,45 @@ export default function MyPlanPage() {
             {plans.length} active purchase{plans.length !== 1 ? "s" : ""}
           </span>
         </div>
+
+        {/* Arrears alert — shown the moment a payment is missed or overdue */}
+        {summary.count > 0 && (
+          <div
+            className={
+              "rounded-2xl border p-5 mb-6 " +
+              (summary.status === "overdue"
+                ? "border-destructive/30 bg-destructive/5"
+                : "border-warning/40 bg-warning/10")
+            }
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={
+                  "flex size-9 flex-shrink-0 items-center justify-center rounded-xl " +
+                  (summary.status === "overdue" ? "bg-destructive/15 text-destructive" : "bg-warning/30 text-foreground")
+                }
+              >
+                <AlertTriangle className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-body font-semibold">
+                  {summary.status === "overdue"
+                    ? `You have ${naira(summary.overdueTotal)} overdue`
+                    : `You are ${naira(summary.missedTotal)} behind on payments`}
+                </p>
+                <p className="text-body-sm text-muted-foreground mt-0.5">
+                  {summary.overdueTotal > 0 && (
+                    <>Overdue balance must be cleared to keep your account in good standing. </>
+                  )}
+                  {summary.missedTotal > 0 && (
+                    <>Catch up on missed payments to stay on schedule and avoid going overdue. </>
+                  )}
+                  Pay the amount due on any plan below, then send your screenshot on WhatsApp.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Wallet summary */}
         <div
@@ -196,11 +165,6 @@ export default function MyPlanPage() {
           </div>
         </div>
 
-        {/* Completed-cycle prompt (payment-flow §6) */}
-        {cycleComplete && (
-          <CycleCompletePrompt reference={cycleComplete.reference} amountAllocated={cycleComplete.amountAllocated} />
-        )}
-
         {/* Active plans */}
         <h2 className="text-body font-semibold mb-3">Your purchases</h2>
         <div className="space-y-4 mb-8">
@@ -212,13 +176,25 @@ export default function MyPlanPage() {
             const soloDelivered = plan.type === "solo" && plan.amountAllocated >= deliveryTarget;
             const balance = Math.max(0, plan.productPrice - plan.amountAllocated);
             const payable = plan.status === "active" || plan.status === "delivered" || plan.status === "processing";
+            const health = healthById.get(plan.id);
+            const inArrears = health ? isArrears(health.status) : false;
 
             const waMessage = encodeURIComponent(
               `Hi OCare Phinas! I just paid ${naira(plan.daily)} for plan ${plan.reference}. Please find my screenshot attached.`,
             );
 
             return (
-              <div key={plan.id} className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div
+                key={plan.id}
+                className={
+                  "rounded-2xl border bg-card overflow-hidden " +
+                  (inArrears
+                    ? health!.status === "overdue"
+                      ? "border-destructive/40"
+                      : "border-warning/50"
+                    : "border-border")
+                }
+              >
                 <div className="flex gap-4 p-5">
                   <div className="size-20 rounded-xl overflow-hidden border border-border flex-shrink-0 bg-muted">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -232,6 +208,12 @@ export default function MyPlanPage() {
                       </span>
                       <span className="text-caption text-muted-foreground font-mono">· {plan.reference}</span>
                       <Badge variant={statusMeta.variant} className="text-micro">{statusMeta.label}</Badge>
+                      {inArrears && (
+                        <Badge variant={HEALTH_META[health!.status].badge} className="text-micro gap-1">
+                          <AlertTriangle className="size-3" />
+                          {HEALTH_META[health!.status].label}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-body-sm font-semibold line-clamp-1">{plan.productName}</p>
                     <p className="text-caption text-muted-foreground">
@@ -259,6 +241,30 @@ export default function MyPlanPage() {
                   </div>
                 </div>
 
+                {/* Arrears detail strip */}
+                {inArrears && (
+                  <div
+                    className={
+                      "border-t px-5 py-3 text-caption flex items-center gap-2 flex-wrap " +
+                      (health!.status === "overdue"
+                        ? "border-destructive/30 bg-destructive/5 text-destructive"
+                        : "border-warning/40 bg-warning/10 text-foreground")
+                    }
+                  >
+                    <AlertTriangle className="size-3.5 flex-shrink-0" />
+                    {health!.status === "overdue" ? (
+                      <span>
+                        <strong>{naira(health!.arrears)} overdue</strong> — payment was due by {formatDate(health!.completionDeadline)} ({health!.daysOverdue} day{health!.daysOverdue !== 1 ? "s" : ""} ago).
+                      </span>
+                    ) : (
+                      <span>
+                        <strong>{naira(health!.arrears)} behind</strong> — {health!.missedPeriods} {SOLO_FREQUENCIES[health!.frequency].unit}
+                        {health!.missedPeriods !== 1 ? "s" : ""} missed. Next payment due {formatDate(health!.nextDueDate)}.
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Status line + pay action */}
                 <div className="border-t border-border px-5 py-3 flex items-center justify-between gap-3 flex-wrap bg-muted/30">
                   <p className="text-caption text-muted-foreground flex items-center gap-1.5">
@@ -274,10 +280,10 @@ export default function MyPlanPage() {
                           Delivers at 50% ({naira(deliveryTarget)})
                         </>
                       )
-                    ) : plan.status === "completed_cycle" ? (
+                    ) : plan.status === "completed" ? (
                       <>
-                        <RefreshCw className="size-3.5 text-accent" />
-                        Cycle complete — choose continue or convert above
+                        <CheckCircle2 className="size-3.5 text-success" />
+                        Completed — paid off and delivered. Your slot is free for a new plan.
                       </>
                     ) : (
                       <>
@@ -292,9 +298,15 @@ export default function MyPlanPage() {
                       href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-lg bg-[#25D366] hover:bg-[#1eb85a] text-white font-semibold text-caption px-3 py-2 transition-colors"
+                      className={
+                        "inline-flex items-center gap-2 rounded-lg text-white font-semibold text-caption px-3 py-2 transition-colors " +
+                        (inArrears && health!.status === "overdue"
+                          ? "bg-destructive hover:bg-destructive/90"
+                          : "bg-[#25D366] hover:bg-[#1eb85a]")
+                      }
                     >
-                      <MessageCircle className="size-4" /> Pay {naira(plan.daily)} today
+                      {inArrears ? <CalendarClock className="size-4" /> : <MessageCircle className="size-4" />}
+                      {inArrears ? `Pay ${naira(health!.arrears)} now` : `Pay ${naira(plan.daily)} today`}
                     </a>
                   )}
                 </div>

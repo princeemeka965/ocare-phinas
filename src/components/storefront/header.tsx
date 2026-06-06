@@ -91,7 +91,9 @@ export function StorefrontHeader() {
     <>
       <header
         className={cn(
-          "sticky top-0 z-40 w-full transition-all duration-300",
+          // Stickiness is owned by the layout wrapper (so the arrears banner can
+          // sit above it and stay pinned too); this just styles the bar.
+          "w-full transition-all duration-300",
           scrolled
             ? "bg-background/95 backdrop-blur-md shadow-sm border-b border-border"
             : "bg-background/80 backdrop-blur-sm",

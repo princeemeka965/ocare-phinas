@@ -8,11 +8,12 @@
 
 import { ShoppingCart, User, Users, type LucideIcon } from "lucide-react";
 
-import type { PaymentOption } from "./pay-small-small";
+import type { PaymentOption, SoloFrequency } from "./pay-small-small";
 
 export type OrderStatus =
   | "pending_payment"
   | "payment_submitted"
+  | "in_plan"
   | "confirmed"
   | "processing"
   | "shipped"
@@ -31,6 +32,7 @@ export const PLAN_META: Record<PaymentOption, { label: string; variant: BadgeVar
 export const STATUS_META: Record<OrderStatus, { label: string; variant: BadgeVariant }> = {
   pending_payment: { label: "Pending payment", variant: "warning" },
   payment_submitted: { label: "Awaiting confirmation", variant: "warning" },
+  in_plan: { label: "In plan", variant: "default" },
   confirmed: { label: "Confirmed", variant: "success" },
   processing: { label: "Processing", variant: "default" },
   shipped: { label: "Shipped", variant: "default" },
@@ -58,6 +60,34 @@ export interface OrderItem {
   image: string;
 }
 
+/**
+ * The payment schedule for a Solo / Group order. Payment is manual, so an
+ * admin confirms each period in the order's payment record (§ payment-flow
+ * §14). Solo uses the customer's chosen amount + frequency; Group uses the
+ * strict slot daily. Missed periods feed the arrears section; the order only
+ * moves to Processing at the fulfilment threshold (solo 50%, group 100%).
+ */
+export interface OrderPlan {
+  /** Plan target — the product price the schedule pays toward. */
+  productPrice: number;
+  /** Amount expected each period (solo: chosen; group: slot daily). */
+  perPayment: number;
+  /** Cadence — solo: the customer's choice; group: always daily. */
+  frequency: SoloFrequency;
+  /** ISO date the payment schedule began. */
+  startDate: string;
+  /** Payment numbers the admin has already confirmed as paid. */
+  paidIndices: number[];
+}
+
+/** Fraction of the price that moves a Solo order into fulfilment. */
+export const SOLO_PROCESSING_THRESHOLD = 0.5;
+
+/** The paid fraction at which a plan order moves to Processing. */
+export function planProcessingThreshold(plan: PaymentOption): number {
+  return plan === "solo" ? SOLO_PROCESSING_THRESHOLD : 1;
+}
+
 export interface Order {
   id: string;
   reference: string;
@@ -74,6 +104,8 @@ export interface Order {
    * WhatsApp. The system never sees the bank, sender name or transaction
    * reference — admins verify against the WhatsApp screenshot + statement. */
   shipping: { address: string; city: string; state: string; landmark?: string };
+  /** Present for Solo / Group orders — drives the manual payment record. */
+  plan?: OrderPlan;
 }
 
 const DELIVERY_FEE = 2500;
@@ -135,7 +167,8 @@ export const MOCK_ORDERS: Order[] = [
   {
     id: "4",
     reference: "OCP-2026-00048",
-    date: "2026-05-25",
+    date: "2026-04-05",
+    // Solo: past 50% so delivered, now finishing the balance — and one week behind.
     status: "delivered",
     paymentPlan: "solo",
     customer: { name: "Chukwuemeka Anyanwu", email: "anyanwue4@gmail.com", phone: "08044567890" },
@@ -146,21 +179,26 @@ export const MOCK_ORDERS: Order[] = [
     deliveryFee: DELIVERY_FEE,
     total: 79990,
     shipping: { address: "3 Awolowo Avenue, Bodija", city: "Ibadan", state: "Oyo State" },
+    // ₦7,000/week chosen by the customer; 7 of 12 weeks confirmed (~63%).
+    plan: { productPrice: 77490, perPayment: 7000, frequency: "weekly", startDate: "2026-04-05", paidIndices: [1, 2, 3, 4, 5, 6, 7] },
   },
   {
     id: "5",
     reference: "OCP-2026-00047",
     date: "2026-05-20",
-    status: "cancelled",
+    // Group: still collecting (below 100%), behind on a few daily payments.
+    status: "in_plan",
     paymentPlan: "group",
     customer: { name: "Ngozi Eze", email: "ngozi@email.com", phone: "08055678901" },
     items: [
-      { id: "i1", name: "Haier Thermocool Chest Freezer 200L", brand: "Haier Thermocool", condition: "new", price: 10000, qty: 1, image: IMG.freezer },
+      { id: "i1", name: "Haier Thermocool Chest Freezer 200L", brand: "Haier Thermocool", condition: "new", price: 60000, qty: 1, image: IMG.freezer },
     ],
-    subtotal: 10000,
+    subtotal: 60000,
     deliveryFee: DELIVERY_FEE,
-    total: 12500,
+    total: 62500,
     shipping: { address: "18 Nnamdi Azikiwe Street", city: "Enugu", state: "Enugu State" },
+    // Strict slot daily of ₦2,000 (2 slots); 12 of 30 days confirmed (40%).
+    plan: { productPrice: 60000, perPayment: 2000, frequency: "daily", startDate: "2026-05-20", paidIndices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
   },
 ];
 

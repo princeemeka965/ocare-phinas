@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ChevronRight, Mail, MessageCircle, Phone, ShieldCheck, ShoppingBag, User, Users, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronRight, Clock, Mail, MessageCircle, Phone, ShieldCheck, ShoppingBag, Truck, User, Users, Wallet } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { naira } from "@/lib/pay-small-small";
-import { getCustomer, getCustomerOrders, getCustomerPayments, walletBalance } from "@/lib/customers";
+import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
+import { HEALTH_META, isArrears } from "@/lib/payment-health";
+import { getCustomer, getCustomerOrders, walletBalance, planScheduleHealth } from "@/lib/customers";
 import { STATUS_META, PLAN_META } from "@/lib/orders";
 import { waLink } from "@/lib/whatsapp";
-import { DecisionActions } from "@/components/admin/decision-actions";
 import { CustomerBlockControl } from "./customer-actions";
 
 export const metadata: Metadata = { title: "Customer — OCare Phinas Admin" };
@@ -27,9 +27,17 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   if (!customer) notFound();
 
   const orders = getCustomerOrders(customer);
-  const payments = getCustomerPayments(customer);
   const w = customer.wallet;
   const balance = walletBalance(w);
+
+  /* Payment health per plan, and the worst arrears state for the alert. */
+  const planHealths = customer.plans.map((plan) => ({ plan, health: planScheduleHealth(plan) }));
+  const arrearsPlans = planHealths.filter((p) => p.health && isArrears(p.health.status));
+  const hasOverdue = arrearsPlans.some((p) => p.health!.status === "overdue");
+  const arrearsTotal = arrearsPlans.reduce((s, p) => s + p.health!.arrears, 0);
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 
   const walletCells = [
     { label: "Solo payments", value: w.soloAllocations },
@@ -63,6 +71,36 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         <CustomerBlockControl name={customer.name} initialBlocked={customer.blocked} />
       </div>
 
+      {/* Arrears alert */}
+      {arrearsPlans.length > 0 && (
+        <div
+          className={cn(
+            "rounded-2xl border p-4 flex items-start gap-3",
+            hasOverdue ? "border-destructive/30 bg-destructive/5" : "border-warning/40 bg-warning/10",
+          )}
+        >
+          <AlertTriangle className={cn("size-5 flex-shrink-0 mt-0.5", hasOverdue ? "text-destructive" : "text-warning")} />
+          <div className="min-w-0">
+            <p className="text-body-sm font-semibold">
+              {hasOverdue
+                ? `${naira(arrearsTotal)} in arrears — ${arrearsPlans.length} plan${arrearsPlans.length !== 1 ? "s" : ""} behind, some overdue`
+                : `${naira(arrearsTotal)} behind on ${arrearsPlans.length} plan${arrearsPlans.length !== 1 ? "s" : ""}`}
+            </p>
+            <a
+              href={waLink(
+                customer.phone,
+                `Hi ${customer.name}, this is OCare Phinas. You have ${naira(arrearsTotal)} outstanding on your plan${arrearsPlans.length !== 1 ? "s" : ""}. Please catch up so we can keep your account in good standing.`,
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-primary hover:underline"
+            >
+              <MessageCircle className="size-3.5" /> Send a payment reminder on WhatsApp
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Contact + plans */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-border bg-card p-5">
@@ -86,14 +124,34 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           {customer.plans.length === 0 ? (
             <p className="text-body-sm text-muted-foreground">No active plans.</p>
           ) : (
-            <div className="space-y-2">
-              {customer.plans.map((p) => {
+            <div className="space-y-3">
+              {planHealths.map(({ plan: p, health }) => {
                 const Icon = PLAN_ICON[p.type];
                 return (
-                  <div key={p.reference} className="flex items-center gap-2 text-body-sm">
-                    <Icon className="size-4 text-primary" />
-                    <span className="font-medium">{p.type === "solo" ? "Solo plan" : "Group plan"}</span>
-                    <span className="text-muted-foreground font-mono">· {p.reference}</span>
+                  <div key={p.reference}>
+                    <div className="flex items-center gap-2 text-body-sm flex-wrap">
+                      <Icon className="size-4 text-primary" />
+                      <span className="font-medium">{p.type === "solo" ? "Solo plan" : "Group plan"}</span>
+                      <span className="text-muted-foreground font-mono">· {p.reference}</span>
+                      {p.schedule?.delivered && (
+                        <span className="inline-flex items-center gap-0.5 text-micro text-success"><Truck className="size-3" /> delivered</span>
+                      )}
+                      {health && (
+                        <Badge variant={HEALTH_META[health.status].badge} className="text-micro gap-1">
+                          {health.status === "overdue" ? <AlertTriangle className="size-3" /> : health.status === "missed" ? <Clock className="size-3" /> : null}
+                          {HEALTH_META[health.status].label}
+                        </Badge>
+                      )}
+                    </div>
+                    {health && isArrears(health.status) && (
+                      <p className="text-caption text-muted-foreground mt-1 pl-6">
+                        {health.status === "overdue" ? (
+                          <>{naira(health.arrears)} overdue · due by {fmtDate(health.completionDeadline)} ({health.daysOverdue} day{health.daysOverdue !== 1 ? "s" : ""} ago)</>
+                        ) : (
+                          <>{naira(health.arrears)} behind · {health.missedPeriods} {SOLO_FREQUENCIES[health.frequency].unit}{health.missedPeriods !== 1 ? "s" : ""} missed · next due {fmtDate(health.nextDueDate)}</>
+                        )}
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -124,33 +182,6 @@ export default async function CustomerDetailPage({ params }: PageProps) {
           </p>
         </div>
       </div>
-
-      {/* Payments awaiting confirmation */}
-      {payments.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-body font-semibold">Payments to review</h2>
-          {payments.map((p) => (
-            <div key={p.id} className="rounded-2xl border border-border bg-card p-5">
-              <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
-                <div>
-                  <p className="text-body font-bold font-mono">{p.orderRef}</p>
-                  <p className="text-caption text-muted-foreground">Submitted {p.submittedAt} · screenshot sent on WhatsApp</p>
-                </div>
-                <p className="text-h3 font-bold text-primary">{naira(p.amount)}</p>
-              </div>
-              <DecisionActions
-                reference={p.orderRef}
-                initialStatus={p.status}
-                confirmLabel="Confirm payment"
-                rejectLabel="Reject"
-                confirmToast={`${p.orderRef} confirmed — order marked confirmed and stock decremented.`}
-                rejectToast={`${p.orderRef} payment rejected.`}
-                note="Verify the WhatsApp screenshot against your bank statement first — bank, sender and reference are not captured by the system."
-              />
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Orders */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">

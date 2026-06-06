@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { User, Shield, Wallet, ChevronRight, CheckCircle, Save } from "lucide-react";
+import { User, Shield, Wallet, ChevronRight, CheckCircle, Save, AlertTriangle } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { naira } from "@/lib/pay-small-small";
+import { arrearsSummary, type PaymentHealth } from "@/lib/payment-health";
+import { MOCK_PLANS, planHealth } from "@/lib/my-plans";
 
 /* Mock profile — replace with authenticated fetch in Phase 3 */
 const MOCK_PROFILE = {
@@ -44,6 +47,10 @@ export default function ProfilePage() {
     ? (profile.plan.amountSaved / profile.plan.amountTarget) * 100
     : 0;
 
+  /* Arrears headline across the customer's plans (shared with the dashboard). */
+  const healths = MOCK_PLANS.map((p) => planHealth(p)).filter((h): h is PaymentHealth => h !== null);
+  const arrears = arrearsSummary(healths);
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -74,6 +81,33 @@ export default function ProfilePage() {
                 </span>
               )}
             </div>
+
+            {/* Arrears alert */}
+            {arrears.count > 0 && (
+              <Link
+                href="/pay-small-small/my-plan"
+                className={cn(
+                  "block rounded-2xl border p-4 transition-colors",
+                  arrears.status === "overdue"
+                    ? "border-destructive/30 bg-destructive/5 hover:border-destructive/50"
+                    : "border-warning/40 bg-warning/10 hover:border-warning/60",
+                )}
+              >
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className={cn("size-4 flex-shrink-0 mt-0.5", arrears.status === "overdue" ? "text-destructive" : "text-warning")} />
+                  <div className="min-w-0">
+                    <p className="text-body-sm font-semibold">
+                      {arrears.status === "overdue"
+                        ? `${naira(arrears.overdueTotal)} overdue`
+                        : `${naira(arrears.missedTotal)} behind on payments`}
+                    </p>
+                    <p className="text-caption text-muted-foreground mt-0.5">
+                      Tap to view and pay your outstanding amount.
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            )}
 
             {/* Plan tag */}
             {profile.plan && (

@@ -342,9 +342,9 @@ function JoinGroupConfirmInner() {
         </div>
 
         <p className="text-caption text-muted-foreground mb-5">
-          By joining you agree to pay {naira(daily)}/day (strictly the daily amount — no paying ahead). Missing a day
-          just pauses your progress. When you complete a cycle you&apos;ll choose to continue or convert to a product —
-          money is never withdrawn as cash.
+          By joining you agree to pay {naira(daily)}/day (strictly the daily amount — no paying ahead). Missing days
+          shows as missed payments on your dashboard. When the plan is fully paid you receive this product and leave the
+          group, freeing your slot to join another — money is never withdrawn as cash.
         </p>
 
         <Button size="lg" className="w-full gap-2" onClick={() => setStep("done")}>
