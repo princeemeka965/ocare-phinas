@@ -1,29 +1,88 @@
-import type { Metadata } from "next";
+"use client";
+
+import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Copy } from "lucide-react";
+import { ArrowLeft, Copy, Check } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
+import { toast } from "@/store/toastStore";
+import { useUserStore } from "@/store/userStore";
+import { AuthRequired } from "@/components/storefront/auth-required";
 
-export const metadata: Metadata = { title: "Payment Instructions — OCare Phinas" };
+interface Order {
+  id: string;
+  reference: string;
+  total: number;
+  status: string;
+}
 
-/* Bank details fetched live from Settings (B10) in Phase 3 */
-const BANK = { name: "OCare Phinas Nigeria Ltd", number: "0123456789", bank: "GTBank" };
-const WHATSAPP_NUMBER = "2340000000000";
+interface PublicSettings {
+  bankName: string;
+  bankAccountName: string;
+  bankAccountNumber: string;
+  whatsappNumber: string;
+}
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function PaymentInstructionsPage({ params }: PageProps) {
-  const { id } = await params;
-  /* Phase 3: fetch real order */
-  const reference = "OCP-2026-00042";
-  const amount = 68490;
+export default function PaymentInstructionsPage({ params }: PageProps) {
+  const { id } = use(params);
+  const router = useRouter();
+  const user = useUserStore((s) => s.user);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get<{ order: Order }>(`/api/orders/${id}`).then((d) => setOrder(d.order)).catch(() => {});
+    api.get<{ settings: PublicSettings }>("/api/settings").then((d) => setSettings(d.settings)).catch(() => {});
+  }, [id, user]);
+
+  if (!user) {
+    return (
+      <AuthRequired
+        title="Log in to complete payment"
+        description="Sign in to see your transfer details and confirm your order."
+      />
+    );
+  }
+
+  if (!order || !settings) {
+    return (
+      <div className="py-8 sm:py-12">
+        <Container className="max-w-lg lg:max-w-2xl">
+          <div className="h-8 w-40 rounded bg-muted animate-pulse mb-8" />
+          <div className="h-64 rounded-2xl border border-border bg-card animate-pulse" />
+        </Container>
+      </div>
+    );
+  }
+
+  const amount = order.total;
+  const reference = order.reference;
+  const alreadySubmitted = order.status !== "pending_payment";
   const waMessage = encodeURIComponent(
     `Hi OCare Phinas! I just transferred ₦${amount.toLocaleString("en-NG")} for order ${reference}. Please find my screenshot attached.`,
   );
+
+  async function markPaid() {
+    setSubmitting(true);
+    try {
+      await api.post(`/api/orders/${id}/submit-payment`);
+      toast.success("Thanks! We'll confirm your transfer shortly.");
+      router.push(`/orders/${id}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't update your order. Please try again.");
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="py-8 sm:py-12">
@@ -46,9 +105,9 @@ export default async function PaymentInstructionsPage({ params }: PageProps) {
               Bank Transfer Details
             </p>
             <div className="space-y-3">
-              <DetailRow label="Bank" value={BANK.bank} />
-              <DetailRow label="Account name" value={BANK.name} />
-              <DetailRow label="Account number" value={BANK.number} copyable />
+              <DetailRow label="Bank" value={settings.bankName || "—"} />
+              <DetailRow label="Account name" value={settings.bankAccountName || "—"} />
+              <DetailRow label="Account number" value={settings.bankAccountNumber || "—"} copyable />
               <DetailRow label="Amount" value={`₦${amount.toLocaleString("en-NG")}`} highlight />
             </div>
           </div>
@@ -62,27 +121,32 @@ export default async function PaymentInstructionsPage({ params }: PageProps) {
                   Include this in the transfer narration/remark so we can match your payment instantly.
                 </p>
               </div>
-              <button
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-caption font-medium flex-shrink-0"
-                aria-label="Copy order reference"
-              >
-                <Copy className="size-3.5" /> Copy
-              </button>
+              <CopyButton value={reference} label="Copy order reference" />
             </div>
           </div>
         </div>
 
-        {/* Primary CTA — WhatsApp */}
+        {/* Primary CTA — mark paid + WhatsApp */}
+        <button
+          onClick={markPaid}
+          disabled={submitting || alreadySubmitted}
+          className="mx-auto flex w-full max-w-md flex-col items-center justify-center rounded-xl bg-[#25D366] hover:bg-[#1eb85a] disabled:opacity-60 text-white font-semibold text-body-sm sm:text-body px-5 sm:px-6 py-3.5 transition-colors mb-3 text-center"
+        >
+          <span>{alreadySubmitted ? "Payment marked — awaiting confirmation" : submitting ? "Saving…" : "I've made the bank transfer"}</span>
+          {!alreadySubmitted && (
+            <span className="text-caption font-normal opacity-90">
+              We&apos;ll mark this order as paid and confirm your transfer
+            </span>
+          )}
+        </button>
+
         <a
-          href={`https://wa.me/${WHATSAPP_NUMBER}?text=${waMessage}`}
+          href={`https://wa.me/${settings.whatsappNumber || "2340000000000"}?text=${waMessage}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mx-auto flex w-full max-w-md flex-col items-center justify-center rounded-xl bg-[#25D366] hover:bg-[#1eb85a] text-white font-semibold text-body-sm sm:text-body px-5 sm:px-6 py-3.5 transition-colors mb-3 text-center"
+          className="mx-auto flex w-full max-w-md items-center justify-center rounded-xl border border-[#25D366] text-[#1eb85a] hover:bg-[#25D366]/5 font-semibold text-body-sm px-5 py-3 transition-colors mb-3 text-center"
         >
-          <span>I&apos;ve made the bank transfer</span>
-          <span className="text-caption font-normal opacity-90">
-            Tap to send your payment receipt on WhatsApp
-          </span>
+          Send my receipt on WhatsApp
         </a>
 
         <p className="text-center text-caption text-muted-foreground mb-6">
@@ -96,6 +160,23 @@ export default async function PaymentInstructionsPage({ params }: PageProps) {
         </div>
       </Container>
     </div>
+  );
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard?.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-caption font-medium flex-shrink-0"
+      aria-label={label}
+    >
+      {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />} {copied ? "Copied" : "Copy"}
+    </button>
   );
 }
 
@@ -122,14 +203,7 @@ function DetailRow({
         >
           {value}
         </span>
-        {copyable && (
-          <button
-            className="flex items-center gap-1 px-2 py-0.5 rounded border border-border hover:bg-muted transition-colors text-caption"
-            aria-label={`Copy ${label}`}
-          >
-            <Copy className="size-3" /> Copy
-          </button>
-        )}
+        {copyable && <CopyButton value={value} label={`Copy ${label}`} />}
       </div>
     </div>
   );

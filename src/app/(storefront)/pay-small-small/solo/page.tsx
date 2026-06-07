@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { User, ArrowLeft, ArrowRight, CheckCircle, Truck, CalendarClock } from "lucide-react";
@@ -9,6 +9,8 @@ import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
+import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import {
@@ -29,18 +31,12 @@ import {
 
 const FREQUENCY_ORDER: SoloFrequency[] = ["daily", "weekly", "monthly"];
 
-/* Mock eligible items — replace with DB query in Phase 3.
-   Includes big-ticket appliances so any price works (no cap on solo). */
-const ITEMS = [
-  { id: "f1", name: "Haier Thermocool Chest Freezer 300L", price: 350000, image: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=200&h=200&fit=crop&q=80" },
-  { id: "f2", name: "Hisense Double-Door Refrigerator", price: 285000, image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&h=200&fit=crop&q=80" },
-  { id: "f3", name: "LG 1.5HP Split Air Conditioner", price: 240000, image: "https://images.unsplash.com/photo-1631545806609-c2b999f7d8c0?w=200&h=200&fit=crop&q=80" },
-  { id: "8", name: 'LG OLED evo C3 55" 4K Smart TV', price: 89990, image: "https://images.unsplash.com/photo-1593784991095-a205069470b6?w=200&h=200&fit=crop&q=80" },
-  { id: "13", name: "Sony PlayStation 5 Slim", price: 56000, image: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=200&h=200&fit=crop&q=80" },
-  { id: "10", name: "Panasonic Microwave Oven 20L", price: 18900, image: "https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?w=200&h=200&fit=crop&q=80" },
-  { id: "7", name: "Sony WH-1000XM5 Headphones", price: 22990, image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop&q=80" },
-  { id: "9", name: "Binatone Standing Fan 16-inch", price: 12500, image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=200&h=200&fit=crop&q=80" },
-];
+interface SoloItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+}
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?w=200&h=200&fit=crop&q=80";
 
@@ -48,17 +44,29 @@ function SoloPlanInner() {
   const user = useUserStore((s) => s.user);
 
   /* A product page can deep-link here with a chosen item:
-     /pay-small-small/solo?name=…&price=…&image=… — we preselect it. */
+     /pay-small-small/solo?productId=…&name=…&price=…&image=… — we preselect it. */
   const params = useSearchParams();
+  const prefillId = params.get("productId");
   const prefillName = params.get("name");
   const prefillPrice = Number(params.get("price"));
-  const prefill =
-    prefillName && prefillPrice > 0
-      ? { id: "prefill", name: prefillName, price: prefillPrice, image: params.get("image") || PLACEHOLDER_IMG }
+  const prefill: SoloItem | null =
+    prefillId && prefillName && prefillPrice > 0
+      ? { id: prefillId, name: prefillName, price: prefillPrice, image: params.get("image") || PLACEHOLDER_IMG }
       : null;
 
-  /* Effective list: the deep-linked item first, then the curated picks. */
-  const itemList = prefill ? [prefill, ...ITEMS.filter((i) => i.name !== prefill.name)] : ITEMS;
+  /* Catalog items the customer can put on a solo plan (real products). */
+  const [items, setItems] = useState<SoloItem[]>([]);
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ products: { id: string; name: string; price: number; images: string[] }[] }>("/api/products?limit=40&sort=price_desc")
+      .then((d) => setItems(d.products.map((p) => ({ id: p.id, name: p.name, price: p.price, image: p.images[0] ?? PLACEHOLDER_IMG }))))
+      .catch(() => setItems([]));
+  }, []);
+
+  /* Effective list: the deep-linked item first, then the catalog. */
+  const itemList = prefill ? [prefill, ...items.filter((i) => i.id !== prefill.id)] : items;
 
   const [step, setStep] = useState<"pick" | "configure" | "done">(prefill ? "configure" : "pick");
   const [selectedItem, setSelectedItem] = useState<string | null>(prefill ? prefill.id : null);
@@ -90,6 +98,20 @@ function SoloPlanInner() {
   function chooseFrequency(next: SoloFrequency) {
     setFrequency(next);
     if (selected) setAmountInput(String(suggestedSoloAmount(selected.price, next)));
+  }
+
+  /* Create the solo plan server-side, then show the success step. */
+  async function startPlan() {
+    if (!selected || !amountValid) return;
+    setStarting(true);
+    try {
+      await api.post("/api/plans", { productId: selected.id, perPayment: amount, frequency });
+      setStep("done");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't start your plan. Please try again.");
+    } finally {
+      setStarting(false);
+    }
   }
 
   /* --------------------------- AUTH GATE --------------------------- */
@@ -282,8 +304,8 @@ function SoloPlanInner() {
             product — there are no withdrawals. You can run more than one plan at a time.
           </p>
 
-          <Button size="lg" className="w-full gap-2" disabled={!math || !amountValid} onClick={() => setStep("done")}>
-            <User className="size-5" /> Start my solo plan
+          <Button size="lg" className="w-full gap-2" disabled={!math || !amountValid || starting} onClick={startPlan}>
+            <User className="size-5" /> {starting ? "Starting…" : "Start my solo plan"}
           </Button>
 
           <p className="text-caption text-muted-foreground text-center mt-3">

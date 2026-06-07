@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { STATUS_FLOW, STATUS_META, type OrderStatus } from "@/lib/orders";
 
@@ -15,9 +16,11 @@ const POST_CONFIRM_STATUSES: OrderStatus[] = ["processing", "shipped", "delivere
 const FLOW_KEYS = STATUS_FLOW.map((s) => s.key);
 
 export function StatusManager({
+  orderId,
   reference,
   initialStatus,
 }: {
+  orderId: string;
   reference: string;
   initialStatus: OrderStatus;
 }) {
@@ -35,25 +38,38 @@ export function StatusManager({
 
   async function save() {
     setSaving(true);
-    // Phase 3: PATCH /api/admin/orders/:id { status: draft }
-    await new Promise((r) => setTimeout(r, 700));
-    setStatus(draft);
-    setSaving(false);
-    toast.success(`${reference} marked “${STATUS_META[draft].label}”.`, "Status updated");
+    try {
+      const { order } = await api.patch<{ order: { status: OrderStatus } }>(
+        `/api/admin/orders/${orderId}/status`,
+        { status: draft },
+      );
+      setStatus(order.status);
+      toast.success(`${reference} marked “${STATUS_META[order.status].label}”.`, "Status updated");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't update the status.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  /** Confirm or reject the customer's payment — drives the same order status. */
+  /** Confirm or reject the customer's payment — drives the same order status.
+      Confirming decrements stock atomically server-side. */
   async function decide(kind: "confirm" | "reject") {
     setDeciding(kind);
-    // Phase 3: POST the decision. Confirming decrements stock atomically and
-    // moves the order into fulfilment (processing).
-    await new Promise((r) => setTimeout(r, 700));
-    const next: OrderStatus = kind === "confirm" ? "processing" : "cancelled";
-    setStatus(next);
-    setDraft(next);
-    setDeciding(null);
-    if (kind === "confirm") toast.success(`${reference} payment confirmed — stock decremented, order now processing.`, "Payment confirmed");
-    else toast.info(`${reference} payment rejected — order cancelled.`, "Payment rejected");
+    try {
+      const { order } = await api.post<{ order: { status: OrderStatus } }>(
+        `/api/admin/orders/${orderId}/${kind}`,
+      );
+      setStatus(order.status);
+      setDraft(order.status);
+      if (kind === "confirm")
+        toast.success(`${reference} payment confirmed — stock decremented, order now processing.`, "Payment confirmed");
+      else toast.info(`${reference} payment rejected — order cancelled.`, "Payment rejected");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't record that decision.");
+    } finally {
+      setDeciding(null);
+    }
   }
 
   return (

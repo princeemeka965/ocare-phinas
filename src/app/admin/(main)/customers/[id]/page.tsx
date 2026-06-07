@@ -1,38 +1,102 @@
-import type { Metadata } from "next";
+"use client";
+
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ChevronRight, Clock, Mail, MessageCircle, Phone, ShieldCheck, ShoppingBag, Truck, User, Users, Wallet } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
-import { HEALTH_META, isArrears } from "@/lib/payment-health";
-import { getCustomer, getCustomerOrders, walletBalance, planScheduleHealth } from "@/lib/customers";
-import { STATUS_META, PLAN_META } from "@/lib/orders";
+import { HEALTH_META, isArrears, type PaymentHealth } from "@/lib/payment-health";
+import { STATUS_META, PLAN_META, type OrderStatus } from "@/lib/orders";
 import { waLink } from "@/lib/whatsapp";
 import { CustomerBlockControl } from "./customer-actions";
 
-export const metadata: Metadata = { title: "Customer — OCare Phinas Admin" };
-
 const PLAN_ICON = { solo: User, group: Users } as const;
+
+interface CustomerPlan {
+  id: string;
+  type: "solo" | "group";
+  reference: string | null;
+  productName: string | null;
+  productPrice: number;
+  amountAllocated: number;
+  status: string;
+  delivered: boolean;
+  health: PaymentHealth | null;
+}
+
+interface CustomerOrder {
+  id: string;
+  reference: string;
+  status: OrderStatus;
+  paymentPlan: "outright" | "solo" | "group";
+  total: number;
+  createdAt: string;
+}
+
+interface CustomerDetail {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  verified: boolean;
+  blocked: boolean;
+  joined: string;
+  wallet: { total: number; available: number; spentOnProducts: number };
+  plans: CustomerPlan[];
+  orders: CustomerOrder[];
+}
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function CustomerDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const customer = getCustomer(id);
-  if (!customer) notFound();
+export default function CustomerDetailPage({ params }: PageProps) {
+  const { id } = use(params);
+  const [customer, setCustomer] = useState<CustomerDetail | null>(null);
+  const [error, setError] = useState(false);
 
-  const orders = getCustomerOrders(customer);
+  useEffect(() => {
+    api
+      .get<{ customer: CustomerDetail }>(`/api/admin/customers/${id}`)
+      .then((d) => setCustomer(d.customer))
+      .catch(() => setError(true));
+  }, [id]);
+
+  if (error) {
+    return (
+      <div className="max-w-5xl space-y-6">
+        <Link href="/admin/customers" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 -ml-2")}>
+          <ArrowLeft className="size-4" /> All customers
+        </Link>
+        <div className="rounded-2xl border border-dashed border-border p-12 text-center text-body-sm text-muted-foreground">
+          Customer not found.
+        </div>
+      </div>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <div className="max-w-5xl space-y-6">
+        <div className="h-8 w-36 rounded bg-muted animate-pulse" />
+        <div className="h-24 rounded-2xl border border-border bg-card animate-pulse" />
+        <div className="h-40 rounded-3xl bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  const orders = customer.orders;
   const w = customer.wallet;
-  const balance = walletBalance(w);
+  const balance = w.total;
 
-  /* Payment health per plan, and the worst arrears state for the alert. */
-  const planHealths = customer.plans.map((plan) => ({ plan, health: planScheduleHealth(plan) }));
-  const arrearsPlans = planHealths.filter((p) => p.health && isArrears(p.health.status));
+  const soloAllocations = customer.plans.filter((p) => p.type === "solo").reduce((s, p) => s + p.amountAllocated, 0);
+  const groupAllocations = customer.plans.filter((p) => p.type === "group").reduce((s, p) => s + p.amountAllocated, 0);
+
+  const arrearsPlans = customer.plans.filter((p) => p.health && isArrears(p.health.status));
   const hasOverdue = arrearsPlans.some((p) => p.health!.status === "overdue");
   const arrearsTotal = arrearsPlans.reduce((s, p) => s + p.health!.arrears, 0);
 
@@ -40,8 +104,8 @@ export default async function CustomerDetailPage({ params }: PageProps) {
     new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 
   const walletCells = [
-    { label: "Solo payments", value: w.soloAllocations },
-    { label: "Group payments", value: w.groupAllocations },
+    { label: "Solo payments", value: soloAllocations },
+    { label: "Group payments", value: groupAllocations },
     { label: "Available balance", value: w.available },
     { label: "Spent on products", value: w.spentOnProducts },
   ];
@@ -68,7 +132,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             </p>
           </div>
         </div>
-        <CustomerBlockControl name={customer.name} initialBlocked={customer.blocked} />
+        <CustomerBlockControl id={customer.id} name={customer.name} initialBlocked={customer.blocked} />
       </div>
 
       {/* Arrears alert */}
@@ -125,15 +189,16 @@ export default async function CustomerDetailPage({ params }: PageProps) {
             <p className="text-body-sm text-muted-foreground">No active plans.</p>
           ) : (
             <div className="space-y-3">
-              {planHealths.map(({ plan: p, health }) => {
+              {customer.plans.map((p) => {
                 const Icon = PLAN_ICON[p.type];
+                const health = p.health;
                 return (
-                  <div key={p.reference}>
+                  <div key={p.id}>
                     <div className="flex items-center gap-2 text-body-sm flex-wrap">
                       <Icon className="size-4 text-primary" />
                       <span className="font-medium">{p.type === "solo" ? "Solo plan" : "Group plan"}</span>
-                      <span className="text-muted-foreground font-mono">· {p.reference}</span>
-                      {p.schedule?.delivered && (
+                      {p.reference && <span className="text-muted-foreground font-mono">· {p.reference}</span>}
+                      {p.delivered && (
                         <span className="inline-flex items-center gap-0.5 text-micro text-success"><Truck className="size-3" /> delivered</span>
                       )}
                       {health && (
@@ -193,14 +258,14 @@ export default async function CustomerDetailPage({ params }: PageProps) {
         ) : (
           <div className="divide-y divide-border">
             {orders.map((order) => {
-              const meta = STATUS_META[order.status];
+              const meta = STATUS_META[order.status] ?? STATUS_META.pending_payment;
               const plan = PLAN_META[order.paymentPlan];
               return (
                 <Link key={order.id} href={`/admin/orders/${order.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/40 transition-colors group">
                   <div className="flex-1 min-w-0">
                     <p className="text-body-sm font-mono font-semibold">{order.reference}</p>
                     <p className="text-caption text-muted-foreground">
-                      {new Date(order.date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })} · {plan.label}
+                      {new Date(order.createdAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })} · {plan.label}
                     </p>
                   </div>
                   <Badge variant={meta.variant} className="text-micro flex-shrink-0">{meta.label}</Badge>

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
 import {
@@ -50,9 +51,11 @@ function fmt(iso: string): string {
 }
 
 export function PlanPaymentRecord({
+  orderId,
   order,
   children,
 }: {
+  orderId: string;
   order: Order & { plan: OrderPlan };
   children?: React.ReactNode;
 }) {
@@ -100,35 +103,47 @@ export function PlanPaymentRecord({
 
   async function confirmPeriod(index: number) {
     setConfirming(index);
-    // Phase 3: POST /api/admin/orders/:id/payments { period: index } — records
-    // the manual confirmation and recomputes arrears. Does NOT touch stock.
-    await new Promise((r) => setTimeout(r, 500));
-    const next = [...paidIndices, index].sort((a, b) => a - b);
-    setPaidIndices(next);
-    setConfirming(null);
+    // POST /api/admin/orders/:id/payments { periodIndex } — records the manual
+    // confirmation and recomputes arrears server-side (idempotent; no stock change).
+    try {
+      await api.post(`/api/admin/orders/${orderId}/payments`, { periodIndex: index });
+      const next = [...paidIndices, index].sort((a, b) => a - b);
+      setPaidIndices(next);
 
-    const nextPaid = paidFromPeriods(
-      planPeriods({ price: plan.productPrice, perPayment: plan.perPayment, frequency: plan.frequency, startDate: plan.startDate, paidIndices: next }),
-    );
-    if (nextPaid >= thresholdAmount && amountPaid < thresholdAmount) {
-      toast.success(
-        isSolo
-          ? `50% reached — ${order.reference} can now move to Processing for delivery.`
-          : `Fully paid — ${order.reference} can now move to Processing.`,
-        "Threshold reached",
+      const nextPaid = paidFromPeriods(
+        planPeriods({ price: plan.productPrice, perPayment: plan.perPayment, frequency: plan.frequency, startDate: plan.startDate, paidIndices: next }),
       );
-    } else {
-      toast.success(`Payment ${index} confirmed for ${order.reference}.`, "Payment confirmed");
+      if (nextPaid >= thresholdAmount && amountPaid < thresholdAmount) {
+        toast.success(
+          isSolo
+            ? `50% reached — ${order.reference} can now move to Processing for delivery.`
+            : `Fully paid — ${order.reference} can now move to Processing.`,
+          "Threshold reached",
+        );
+      } else {
+        toast.success(`Payment ${index} confirmed for ${order.reference}.`, "Payment confirmed");
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't confirm that payment.");
+    } finally {
+      setConfirming(null);
     }
   }
 
   async function saveStatus() {
     setSaving(true);
-    // Phase 3: PATCH /api/admin/orders/:id { status: draft }
-    await new Promise((r) => setTimeout(r, 600));
-    setStatus(draft);
-    setSaving(false);
-    toast.success(`${order.reference} marked “${STATUS_META[draft].label}”.`, "Status updated");
+    try {
+      const { order: updated } = await api.patch<{ order: { status: OrderStatus } }>(
+        `/api/admin/orders/${orderId}/status`,
+        { status: draft },
+      );
+      setStatus(updated.status);
+      toast.success(`${order.reference} marked “${STATUS_META[updated.status].label}”.`, "Status updated");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't update the status.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

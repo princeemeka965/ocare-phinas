@@ -205,3 +205,85 @@ export const MOCK_ORDERS: Order[] = [
 export function getOrder(id: string): Order | undefined {
   return MOCK_ORDERS.find((o) => o.id === id);
 }
+
+/* ------------------------------------------------------------------ *
+ * API → UI mapping                                                    *
+ * ------------------------------------------------------------------ *
+ * Shapes the Prisma order returned by /api/admin/orders[/:id] into the *
+ * `Order` view model the admin screens render, so the kept helpers     *
+ * (planPeriods / paymentHealth) and components stay unchanged.         *
+ * ------------------------------------------------------------------ */
+
+interface ApiOrderItem {
+  id: string;
+  name: string;
+  brand?: string | null;
+  condition: "new" | "used";
+  price: number;
+  qty: number;
+  image?: string | null;
+}
+
+interface ApiOrderPlan {
+  productPrice: number;
+  perPayment: number;
+  frequency: SoloFrequency;
+  startDate: string;
+  payments?: { periodIndex: number }[];
+}
+
+export interface ApiOrder {
+  id: string;
+  reference: string;
+  createdAt: string;
+  status: OrderStatus;
+  paymentPlan: PaymentOption;
+  customer: { name: string; email: string; phone: string };
+  items: ApiOrderItem[];
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  shipAddress: string;
+  shipCity: string;
+  shipState: string;
+  shipLandmark?: string | null;
+  plan?: ApiOrderPlan | null;
+}
+
+export function mapApiOrder(o: ApiOrder): Order {
+  return {
+    id: o.id,
+    reference: o.reference,
+    date: o.createdAt,
+    status: o.status,
+    paymentPlan: o.paymentPlan,
+    customer: o.customer,
+    items: o.items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      brand: i.brand ?? "",
+      condition: i.condition,
+      price: i.price,
+      qty: i.qty,
+      image: i.image ?? "",
+    })),
+    subtotal: o.subtotal,
+    deliveryFee: o.deliveryFee,
+    total: o.total,
+    shipping: {
+      address: o.shipAddress,
+      city: o.shipCity,
+      state: o.shipState,
+      landmark: o.shipLandmark ?? undefined,
+    },
+    plan: o.plan
+      ? {
+          productPrice: o.plan.productPrice,
+          perPayment: o.plan.perPayment,
+          frequency: o.plan.frequency,
+          startDate: o.plan.startDate,
+          paidIndices: (o.plan.payments ?? []).map((p) => p.periodIndex).sort((a, b) => a - b),
+        }
+      : undefined,
+  };
+}

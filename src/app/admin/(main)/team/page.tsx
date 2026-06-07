@@ -1,17 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ShieldCheck, UserPlus, Trash2, Eye, Mail, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { useAdminStore } from "@/store/adminStore";
 import { ASSIGNABLE_PERMISSIONS, PERMISSION_META, type AdminPermission } from "@/lib/admin-access";
 
 const INPUT_CLASS =
   "w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors";
+
+interface SubAdminRow {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  disabled: boolean;
+  permissions: AdminPermission[];
+}
 
 function PermissionToggle({
   perm,
@@ -52,39 +62,85 @@ function PermissionToggle({
 }
 
 export default function AdminTeamPage() {
-  const subAdmins = useAdminStore((s) => s.subAdmins);
-  const addSubAdmin = useAdminStore((s) => s.addSubAdmin);
-  const togglePermission = useAdminStore((s) => s.togglePermission);
-  const removeSubAdmin = useAdminStore((s) => s.removeSubAdmin);
   const previewAs = useAdminStore((s) => s.previewAs);
 
+  const [subAdmins, setSubAdmins] = useState<SubAdminRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [perms, setPerms] = useState<AdminPermission[]>([]);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ subAdmins: SubAdminRow[] }>("/api/admin/team")
+      .then((d) => setSubAdmins(d.subAdmins))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
 
   function toggleNewPerm(perm: AdminPermission) {
     setPerms((p) => (p.includes(perm) ? p.filter((x) => x !== perm) : [...p, perm]));
   }
 
-  function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim()) {
       toast.error("Name, email and a temporary password are required.", "Missing details");
+      return;
+    }
+    if (password.trim().length < 8) {
+      toast.error("The temporary password must be at least 8 characters.", "Password too short");
       return;
     }
     if (perms.length === 0) {
       toast.error("Grant at least one area so the sub-admin can do something.", "No permissions");
       return;
     }
-    // Phase 3: POST /api/admin/team { name, email, password, permissions } —
-    // creates the credentials the sub-admin signs in with.
-    addSubAdmin({ name: name.trim(), email: email.trim(), permissions: perms });
-    toast.success(`${name.trim()} can now sign in with the credentials you set.`, "Sub-admin added");
-    setName("");
-    setEmail("");
-    setPassword("");
-    setPerms([]);
+    setCreating(true);
+    try {
+      const { subAdmin } = await api.post<{ subAdmin: SubAdminRow }>("/api/admin/team", {
+        name: name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        permissions: perms,
+      });
+      setSubAdmins((list) => [subAdmin, ...list]);
+      toast.success(`${subAdmin.name} can now sign in with the credentials you set.`, "Sub-admin added");
+      setName("");
+      setEmail("");
+      setPassword("");
+      setPerms([]);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't create the sub-admin.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function togglePermission(sub: SubAdminRow, perm: AdminPermission) {
+    const next = sub.permissions.includes(perm)
+      ? sub.permissions.filter((p) => p !== perm)
+      : [...sub.permissions, perm];
+    // Optimistic update; revert on failure.
+    setSubAdmins((list) => list.map((s) => (s.id === sub.id ? { ...s, permissions: next } : s)));
+    try {
+      await api.patch(`/api/admin/team/${sub.id}`, { permissions: next });
+    } catch (err) {
+      setSubAdmins((list) => list.map((s) => (s.id === sub.id ? { ...s, permissions: sub.permissions } : s)));
+      toast.error(err instanceof ApiError ? err.message : "Couldn't update permissions.");
+    }
+  }
+
+  async function removeSubAdmin(sub: SubAdminRow) {
+    try {
+      await api.del(`/api/admin/team/${sub.id}`);
+      setSubAdmins((list) => list.filter((s) => s.id !== sub.id));
+      toast.info(`${sub.name} removed.`, "Sub-admin removed");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't remove the sub-admin.");
+    }
   }
 
   return (
@@ -115,7 +171,7 @@ export default function AdminTeamPage() {
           </div>
           <div className="space-y-1.5">
             <label className="text-body-sm font-medium">Temporary password</label>
-            <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT_CLASS} placeholder="They change it on first login" />
+            <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT_CLASS} placeholder="8+ chars — they change it on first login" />
           </div>
         </div>
 
@@ -129,15 +185,21 @@ export default function AdminTeamPage() {
           <p className="text-micro text-muted-foreground mt-2">Managing the team is reserved for super admins and can&apos;t be granted.</p>
         </div>
 
-        <Button type="submit" className="gap-2">
-          <UserPlus className="size-4" /> Create sub-admin
+        <Button type="submit" disabled={creating} className="gap-2">
+          <UserPlus className="size-4" /> {creating ? "Creating…" : "Create sub-admin"}
         </Button>
       </form>
 
       {/* Existing sub-admins */}
       <div className="space-y-3">
         <h2 className="text-body font-semibold">Sub-admins ({subAdmins.length})</h2>
-        {subAdmins.length === 0 ? (
+        {!loaded ? (
+          <div className="space-y-3">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="h-40 rounded-2xl border border-border bg-card animate-pulse" />
+            ))}
+          </div>
+        ) : subAdmins.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-12 text-center text-body-sm text-muted-foreground">
             No sub-admins yet. Add one above.
           </div>
@@ -155,16 +217,17 @@ export default function AdminTeamPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {sub.disabled && <Badge variant="destructive" className="text-micro">Disabled</Badge>}
                   <Badge variant="secondary" className="text-micro">{sub.permissions.length} area{sub.permissions.length !== 1 ? "s" : ""}</Badge>
                   <button
-                    onClick={() => previewAs(sub)}
+                    onClick={() => previewAs({ id: sub.id, name: sub.name, email: sub.email, permissions: sub.permissions, createdAt: sub.createdAt })}
                     className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border text-caption font-medium hover:bg-muted transition-colors"
                     title="See the admin as this sub-admin sees it"
                   >
                     <Eye className="size-3.5" /> Preview
                   </button>
                   <button
-                    onClick={() => { removeSubAdmin(sub.id); toast.info(`${sub.name} removed.`, "Sub-admin removed"); }}
+                    onClick={() => removeSubAdmin(sub)}
                     className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-destructive/30 text-destructive text-caption font-medium hover:bg-destructive/10 transition-colors"
                   >
                     <Trash2 className="size-3.5" /> Remove
@@ -179,7 +242,7 @@ export default function AdminTeamPage() {
                     key={perm}
                     perm={perm}
                     checked={sub.permissions.includes(perm)}
-                    onChange={() => togglePermission(sub.id, perm)}
+                    onChange={() => togglePermission(sub, perm)}
                   />
                 ))}
               </div>

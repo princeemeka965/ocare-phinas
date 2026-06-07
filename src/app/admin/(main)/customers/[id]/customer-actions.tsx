@@ -5,21 +5,34 @@ import { Ban, CheckCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 
-export function CustomerBlockControl({ name, initialBlocked }: { name: string; initialBlocked: boolean }) {
+export function CustomerBlockControl({
+  id,
+  name,
+  initialBlocked,
+}: {
+  id: string;
+  name: string;
+  initialBlocked: boolean;
+}) {
   const [blocked, setBlocked] = useState(initialBlocked);
   const [busy, setBusy] = useState(false);
 
   async function toggle() {
     setBusy(true);
     const next = !blocked;
-    // Phase 3: PATCH /api/admin/customers/:id { blocked: next }
-    await new Promise((r) => setTimeout(r, 500));
-    setBlocked(next);
-    setBusy(false);
-    if (next) toast.info(`${name} has been blocked.`, "Customer blocked");
-    else toast.success(`${name} has been unblocked.`, "Customer unblocked");
+    try {
+      const res = await api.patch<{ blocked: boolean }>(`/api/admin/customers/${id}/block`, { blocked: next });
+      setBlocked(res.blocked);
+      if (res.blocked) toast.info(`${name} has been blocked.`, "Customer blocked");
+      else toast.success(`${name} has been unblocked.`, "Customer unblocked");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't update this customer.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

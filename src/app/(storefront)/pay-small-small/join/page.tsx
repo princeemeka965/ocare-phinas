@@ -1,39 +1,38 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Users, ArrowLeft, Lock, ArrowRight } from "lucide-react";
+import { Users, ArrowLeft, ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { SLOT_DAILY, CYCLE_DAYS, SLOT_CYCLE_VALUE, GROUP_PRICE_CAP, naira } from "@/lib/pay-small-small";
 
 interface Group {
   id: string;
   reference: string;
-  slotsFilled: number;
+  name: string;
   totalSlots: number;
-  startDate: string;
-  status: "open" | "full" | "completed";
+  slotsFilled: number;
+  cycleLengthDays: number;
+  slotsAvailable: number;
 }
-
-/* Mock groups — replace with DB fetch in Phase 3.
-   A group is a fixed pool of slots (1 slot = ₦1,000/day). Members fill slots
-   and receive their item in position order as collective funds build. */
-const MOCK_GROUPS: Group[] = [
-  { id: "1", reference: "G-017", slotsFilled: 3, totalSlots: 10, startDate: "2026-06-01", status: "open" },
-  { id: "2", reference: "G-016", slotsFilled: 8, totalSlots: 10, startDate: "2026-05-20", status: "open" },
-  { id: "3", reference: "G-015", slotsFilled: 10, totalSlots: 10, startDate: "2026-05-01", status: "full" },
-  { id: "4", reference: "G-014", slotsFilled: 10, totalSlots: 10, startDate: "2026-04-01", status: "completed" },
-];
 
 function JoinGroupInner() {
   const params = useSearchParams();
   const itemQuery = params.toString();
-  const openGroups = MOCK_GROUPS.filter((g) => g.status === "open");
+  const [groups, setGroups] = useState<Group[] | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ groups: Group[] }>("/api/groups")
+      .then((d) => setGroups(d.groups))
+      .catch(() => setGroups([]));
+  }, []);
 
   /* Carry any deep-linked item (from a product page) through to the confirm step. */
   const joinHref = (id: string) =>
@@ -59,51 +58,37 @@ function JoinGroupInner() {
           </p>
         </div>
 
-        {openGroups.length > 0 ? (
+        {groups === null ? (
           <div className="space-y-4 mb-8">
-            {MOCK_GROUPS.map((group) => {
-              const isFull = group.status === "full";
-              const isCompleted = group.status === "completed";
-              const slotsLeft = group.totalSlots - group.slotsFilled;
-
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="h-32 rounded-2xl border border-border bg-card animate-pulse" />
+            ))}
+          </div>
+        ) : groups.length > 0 ? (
+          <div className="space-y-4 mb-8">
+            {groups.map((group) => {
+              const slotsLeft = group.slotsAvailable;
               return (
                 <div
                   key={group.id}
-                  className={cn(
-                    "rounded-2xl border bg-card p-5 transition-all duration-200",
-                    !isFull && !isCompleted
-                      ? "border-border hover:border-primary/40 hover:shadow-md"
-                      : "border-border opacity-60",
-                  )}
+                  className="rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:border-primary/40 hover:shadow-md"
                 >
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-body font-bold font-mono">{group.reference}</span>
-                        <Badge
-                          variant={
-                            group.status === "open"
-                              ? "success"
-                              : group.status === "full"
-                              ? "warning"
-                              : "secondary"
-                          }
-                          className="text-micro"
-                        >
-                          {group.status === "open" ? "Open" : group.status === "full" ? "Full" : "Completed"}
-                        </Badge>
+                        <Badge variant="success" className="text-micro">Open</Badge>
                       </div>
                       <div className="flex items-center gap-4 text-body-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Users className="size-3.5" />
                           {group.slotsFilled}/{group.totalSlots} slots
                         </span>
-                        <span>Starts {new Date(group.startDate).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}</span>
                       </div>
                       <div className="mt-2 flex items-center gap-3 text-caption text-muted-foreground">
                         <span>{naira(SLOT_DAILY)}/day per slot</span>
                         <span>·</span>
-                        <span>{CYCLE_DAYS} days</span>
+                        <span>{group.cycleLengthDays} days</span>
                         <span>·</span>
                         <span>{naira(SLOT_CYCLE_VALUE)} per slot/cycle</span>
                       </div>
@@ -120,24 +105,15 @@ function JoinGroupInner() {
                           />
                         ))}
                       </div>
-                      {!isFull && !isCompleted && (
-                        <p className="text-caption text-primary font-medium mt-1.5">
-                          {slotsLeft} slot{slotsLeft !== 1 ? "s" : ""} remaining
-                        </p>
-                      )}
+                      <p className="text-caption text-primary font-medium mt-1.5">
+                        {slotsLeft} slot{slotsLeft !== 1 ? "s" : ""} remaining
+                      </p>
                     </div>
 
                     <div className="flex-shrink-0">
-                      {isFull || isCompleted ? (
-                        <span className="flex items-center gap-1.5 text-body-sm text-muted-foreground">
-                          <Lock className="size-4" />
-                          {isFull ? "Full" : "Completed"}
-                        </span>
-                      ) : (
-                        <Link href={joinHref(group.id)} className={cn(buttonVariants(), "gap-2")}>
-                          Join <ArrowRight className="size-4" />
-                        </Link>
-                      )}
+                      <Link href={joinHref(group.id)} className={cn(buttonVariants(), "gap-2")}>
+                        Join <ArrowRight className="size-4" />
+                      </Link>
                     </div>
                   </div>
                 </div>

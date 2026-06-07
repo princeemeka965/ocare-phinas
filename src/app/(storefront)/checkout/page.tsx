@@ -28,6 +28,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { useCartStore, cartItemCount, cartSubtotal } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { toast } from "@/store/toastStore";
@@ -195,28 +196,80 @@ export default function CheckoutPage() {
     setErrors({});
     setLoading(true);
 
-    await new Promise((r) => setTimeout(r, 900));
-
-    /* Pay Small Small plans don't pay now — they start a savings plan and pay daily.
-       Outright orders create a pending order awaiting bank transfer. (Phase 3: real APIs.) */
-    if (plan === "solo" || plan === "group") {
-      clearCart();
-      toast.success(
-        plan === "solo"
-          ? "Solo plan started — track your payments on My Plan."
-          : "Group plan started — track your slots on My Plan.",
-      );
-      router.push("/pay-small-small/my-plan");
+    /* Re-validate the cart against live stock + price before committing. */
+    try {
+      const v = await api.post<{ hasIssues: boolean }>("/api/cart/validate", {
+        items: items.map((i) => ({ id: i.id, qty: i.quantity, price: i.price })),
+      });
+      if (v.hasIssues) {
+        toast.error("Some items changed in price or availability — please review your cart.");
+        setLoading(false);
+        router.push("/cart");
+        return;
+      }
+    } catch {
+      toast.error("Couldn't verify your cart. Please try again.");
+      setLoading(false);
       return;
     }
 
-    /* Phase 3: POST /api/orders → returns reference + id. Stock is decremented only
-       after an admin confirms the bank transfer, so we just create a pending order. */
-    const reference = `OCP-2026-${String(Math.floor(Math.random() * 90000) + 10000)}`;
+    /* Shipping — pickup uses the store address so the order always has a location. */
+    const shipping = isDelivery
+      ? {
+          address: (fd.get("address") as string).trim(),
+          city: (fd.get("city") as string).trim(),
+          state,
+          landmark: ((fd.get("landmark") as string) || "").trim() || undefined,
+        }
+      : { address: "Pickup — OCare Phinas Store, 1 Otigba Street", city: "Ikeja", state: "Lagos" };
 
-    clearCart();
-    toast.success("Order created — complete your bank transfer to confirm it.");
-    router.push(`/orders/${reference}/payment`);
+    try {
+      /* Outright — create a pending order; stock is decremented only when an admin
+         confirms the bank transfer. */
+      if (plan === "outright") {
+        const { order } = await api.post<{ order: { id: string } }>("/api/orders", {
+          items: items.map((i) => ({ id: i.id, qty: i.quantity })),
+          shipping,
+        });
+        clearCart();
+        toast.success("Order created — complete your bank transfer to confirm it.");
+        router.push(`/orders/${order.id}/payment`);
+        return;
+      }
+
+      /* Pay Small Small plans cover a single item (slot math is per-product). */
+      if (items.length !== 1 || items[0].quantity !== 1) {
+        toast.error("Pay Small Small plans cover one item at a time. Keep a single item in your cart to start a plan.");
+        setLoading(false);
+        return;
+      }
+      const line = items[0];
+
+      if (plan === "solo") {
+        await api.post("/api/plans", {
+          productId: line.id,
+          perPayment: soloAmountNum,
+          frequency: soloFreq,
+          shipping,
+        });
+        clearCart();
+        toast.success("Solo plan started — track your payments on My Plan.");
+        router.push("/pay-small-small/my-plan");
+        return;
+      }
+
+      /* Group — pick an open group on the join page, carrying the chosen item. */
+      const qs = new URLSearchParams({
+        productId: line.id,
+        name: line.name,
+        price: String(line.price),
+        image: line.image ?? "",
+      });
+      router.push(`/pay-small-small/join?${qs.toString()}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setLoading(false);
+    }
   }
 
   return (

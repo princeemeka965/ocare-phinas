@@ -26,7 +26,6 @@ function RegisterForm() {
   const next = safeNext(params.get("next"));
 
   const [showPassword, setShowPassword] = useState(false);
-  const [pssOptIn, setPssOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -63,7 +62,7 @@ function RegisterForm() {
       });
       setUser({ id: customer.id, email: customer.email, name: customer.name });
       // Phase 3: optionally route to phone OTP verification before continuing.
-      router.push(pssOptIn ? "/pay-small-small" : next);
+      router.push(next);
     } catch (err) {
       setErrors({ form: err instanceof ApiError ? err.message : "Could not create your account. Please try again." });
       setLoading(false);
@@ -126,24 +125,6 @@ function RegisterForm() {
           </div>
 
           {field("confirm", "Confirm password", { type: "password", autoComplete: "new-password", required: true, placeholder: "Repeat your password" })}
-
-          {/* Pay Small Small opt-in */}
-          <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-2">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={pssOptIn}
-                onChange={(e) => setPssOptIn(e.target.checked)}
-                className="mt-0.5 rounded border-input text-primary focus:ring-primary flex-shrink-0"
-              />
-              <div>
-                <p className="text-body-sm font-medium">Join a Pay Small Small plan (optional)</p>
-                <p className="text-caption text-muted-foreground mt-0.5">
-                  Pick any item and pay over time — on a solo plan choose any amount, daily, weekly or monthly, delivered at 50%. You can always start later — shopping works normally without a plan.
-                </p>
-              </div>
-            </label>
-          </div>
 
           {errors.form && (
             <p className="text-caption text-destructive bg-destructive/10 rounded-lg px-3 py-2">{errors.form}</p>

@@ -1,63 +1,114 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { User, Shield, Wallet, ChevronRight, CheckCircle, Save, AlertTriangle } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { naira } from "@/lib/pay-small-small";
+import { api, ApiError } from "@/lib/api";
+import { toast } from "@/store/toastStore";
+import { useUserStore } from "@/store/userStore";
+import { AuthRequired } from "@/components/storefront/auth-required";
+import { naira, SOLO_DELIVERY_THRESHOLD } from "@/lib/pay-small-small";
 import { arrearsSummary, type PaymentHealth } from "@/lib/payment-health";
-import { MOCK_PLANS, planHealth } from "@/lib/my-plans";
 
-/* Mock profile — replace with authenticated fetch in Phase 3 */
-const MOCK_PROFILE = {
-  name: "Chukwuemeka Anyanwu",
-  email: "anyanwue4@gmail.com",
-  phone: "08012345678",
-  phoneVerified: true,
-  plan: {
-    type: "solo" as "group" | "solo",
-    reference: "SOLO-0042",
-    daily: 7000,
-    paymentsMade: 28,
-    amountSaved: 196000,
-    amountTarget: 350000,
-  },
-};
+interface MeCustomer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  phoneVerified: boolean;
+}
+
+interface ApiPlan {
+  id: string;
+  type: "solo" | "group" | "outright";
+  reference: string | null;
+  perPayment: number;
+  productPrice: number;
+  amountAllocated: number;
+  status: string;
+  health: PaymentHealth | null;
+}
 
 const INPUT_CLASS =
   "w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors";
 
 export default function ProfilePage() {
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const profile = MOCK_PROFILE;
+  const user = useUserStore((s) => s.user);
+  const updateUser = useUserStore((s) => s.updateUser);
 
-  const initials = profile.name
+  const [me, setMe] = useState<MeCustomer | null>(null);
+  const [plans, setPlans] = useState<ApiPlan[]>([]);
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<{ customer: MeCustomer | null }>("/api/auth/me")
+      .then((d) => {
+        if (d.customer) {
+          setMe(d.customer);
+          setForm({ name: d.customer.name, email: d.customer.email, phone: d.customer.phone });
+        }
+      })
+      .catch(() => {});
+    api.get<{ plans: ApiPlan[] }>("/api/me/plans").then((d) => setPlans(d.plans)).catch(() => {});
+  }, [user]);
+
+  if (!user) {
+    return (
+      <AuthRequired
+        title="Log in to see your profile"
+        description="Sign in to manage your details and Pay Small Small plans."
+      />
+    );
+  }
+
+  if (!me) {
+    return (
+      <div className="py-8 sm:py-12">
+        <Container className="max-w-5xl">
+          <div className="h-8 w-40 rounded bg-muted animate-pulse mb-8" />
+          <div className="h-64 rounded-2xl border border-border bg-card animate-pulse" />
+        </Container>
+      </div>
+    );
+  }
+
+  const initials = me.name
     .split(" ")
     .map((n) => n[0])
     .slice(0, 2)
     .join("")
     .toUpperCase();
 
-  const planProgress = profile.plan
-    ? (profile.plan.amountSaved / profile.plan.amountTarget) * 100
-    : 0;
+  const plan = plans.find((p) => p.status === "active" || p.status === "delivered" || p.status === "processing") ?? null;
+  const planProgress = plan ? Math.min(100, (plan.amountAllocated / plan.productPrice) * 100) : 0;
 
-  /* Arrears headline across the customer's plans (shared with the dashboard). */
-  const healths = MOCK_PLANS.map((p) => planHealth(p)).filter((h): h is PaymentHealth => h !== null);
+  const healths = plans.map((p) => p.health).filter((h): h is PaymentHealth => h !== null);
   const arrears = arrearsSummary(healths);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    try {
+      const { customer } = await api.patch<{ customer: MeCustomer }>("/api/auth/me", {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+      });
+      setMe(customer);
+      updateUser({ name: customer.name, email: customer.email });
+      toast.success("Your profile has been updated.", "Saved");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't save your changes.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -73,9 +124,9 @@ export default function ProfilePage() {
               <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 text-primary text-h2 font-bold mx-auto mb-4">
                 {initials}
               </div>
-              <p className="text-body font-semibold">{profile.name}</p>
-              <p className="text-body-sm text-muted-foreground break-all">{profile.email}</p>
-              {profile.phoneVerified && (
+              <p className="text-body font-semibold">{me.name}</p>
+              <p className="text-body-sm text-muted-foreground break-all">{me.email}</p>
+              {me.phoneVerified && (
                 <span className="inline-flex items-center gap-1 mt-3 rounded-full bg-success/10 px-2.5 py-1 text-micro font-semibold text-success">
                   <CheckCircle className="size-3" /> Phone verified
                 </span>
@@ -110,18 +161,19 @@ export default function ProfilePage() {
             )}
 
             {/* Plan tag */}
-            {profile.plan && (
+            {plan && (
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
                     <Wallet className="size-4 text-primary" />
                   </div>
                   <p className="text-body-sm font-semibold">
-                    {profile.plan.type === "group" ? `Group #${profile.plan.reference}` : "Solo Plan"}
+                    {plan.type === "group" ? `Group ${plan.reference ?? ""}` : "Solo Plan"}
                   </p>
                 </div>
                 <p className="text-caption text-muted-foreground mb-3">
-                  {profile.plan.paymentsMade} payments · ₦{profile.plan.daily.toLocaleString("en-NG")}/day · ₦{profile.plan.amountSaved.toLocaleString("en-NG")} of ₦{profile.plan.amountTarget.toLocaleString("en-NG")}
+                  ₦{plan.perPayment.toLocaleString("en-NG")}/payment · ₦{plan.amountAllocated.toLocaleString("en-NG")} of ₦{plan.productPrice.toLocaleString("en-NG")}
+                  {plan.type === "solo" && ` · delivers at ${naira(plan.productPrice * SOLO_DELIVERY_THRESHOLD)}`}
                 </p>
                 <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-4">
                   <div
@@ -152,27 +204,40 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-body-sm font-medium">Full name</label>
-                    <input type="text" defaultValue={profile.name} className={INPUT_CLASS} />
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                      className={INPUT_CLASS}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-body-sm font-medium">Email address</label>
-                    <input type="email" defaultValue={profile.email} className={INPUT_CLASS} />
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                      className={INPUT_CLASS}
+                    />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <div className="flex items-center gap-2">
                       <label className="text-body-sm font-medium">Phone number</label>
-                      {profile.phoneVerified && (
+                      {me.phoneVerified && (
                         <span className="flex items-center gap-1 text-micro font-semibold text-success">
                           <CheckCircle className="size-3" /> Verified
                         </span>
                       )}
                     </div>
-                    <input type="tel" defaultValue={profile.phone} className={INPUT_CLASS} />
-                    {profile.phoneVerified && (
-                      <p className="text-caption text-muted-foreground">
-                        Changing your phone number requires re-verification.
-                      </p>
-                    )}
+                    <input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                      className={INPUT_CLASS}
+                    />
+                    <p className="text-caption text-muted-foreground">
+                      Changing your phone number requires re-verification.
+                    </p>
                   </div>
                 </div>
 
@@ -181,11 +246,6 @@ export default function ProfilePage() {
                     <Save className="size-4" />
                     {saving ? "Saving…" : "Save changes"}
                   </Button>
-                  {saved && (
-                    <span className="flex items-center gap-1.5 text-caption text-success font-medium">
-                      <CheckCircle className="size-3.5" /> Saved
-                    </span>
-                  )}
                 </div>
               </form>
             </div>
@@ -196,7 +256,13 @@ export default function ProfilePage() {
                 <Shield className="size-5 text-primary" />
                 <h2 className="text-body font-semibold">Security</h2>
               </div>
-              <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  toast.info("To change your password, please contact support for now.", "Coming soon");
+                }}
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-body-sm font-medium">Current password</label>

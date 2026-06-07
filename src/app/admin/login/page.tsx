@@ -73,13 +73,6 @@ export default function AdminLoginPage() {
               {loading ? "Logging in…" : "Log in"}
             </button>
           </form>
-
-          {/* Seeded super admin — remove before production. */}
-          <div className="mt-5 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 text-micro text-muted-foreground space-y-0.5">
-            <p className="font-semibold text-foreground/70">Seeded super admin</p>
-            <p><span className="font-mono">admin@ocarephinas.com</span> · password from <span className="font-mono">SEED_ADMIN_PASSWORD</span></p>
-            <p>Create sub-admins from Team &amp; permissions after signing in.</p>
-          </div>
         </div>
         <p className="text-center text-caption text-muted-foreground mt-6">Admin access only. Unauthorized access is prohibited.</p>
       </div>

@@ -54,7 +54,7 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
   const groupSlots = groupSlotsForPrice(product.price);
   const groupDaily = dailyForSlots(groupSlots);
 
-  const itemQuery = `item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(images[0] ?? "")}`;
+  const itemQuery = `productId=${product.id}&item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(images[0] ?? "")}`;
 
   function handleAddToCart() {
     for (let i = 0; i < qty; i++) {

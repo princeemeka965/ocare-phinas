@@ -1,22 +1,30 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, Clock } from "lucide-react";
 
 import { useUserStore } from "@/store/userStore";
+import { api } from "@/lib/api";
 import { isMinimalChrome } from "@/lib/chrome-routes";
 import { naira } from "@/lib/pay-small-small";
-import { arrearsSummary, isArrears } from "@/lib/payment-health";
-import { MOCK_PLANS, planHealth, type Plan } from "@/lib/my-plans";
+import { arrearsSummary, isArrears, type PaymentHealth } from "@/lib/payment-health";
 
 /* Colours fixed against the dark banner so red (overdue) and gold (missed)
    read clearly regardless of the active theme. */
 const OVERDUE_TEXT = "text-[oklch(0.74_0.19_25)]";
 const MISSED_TEXT = "text-[oklch(0.84_0.15_85)]";
 
+interface ApiPlan {
+  id: string;
+  productName: string | null;
+  health: PaymentHealth | null;
+}
+
 interface ArrearsItem {
-  plan: Plan;
+  id: string;
+  productName: string;
   overdue: boolean;
   amount: number;
   daysOverdue: number;
@@ -27,33 +35,39 @@ interface ArrearsItem {
  * customer has a missed or overdue Pay Small Small payment, it strolls the
  * amounts owed across the top — each item naming the product, with OVERDUE
  * (red) clearly distinguished from MISSED (gold). Hidden when nothing is
- * owed, on auth / focused flows, and before hydration.
- *
- * Phase 3: replace MOCK_PLANS with the signed-in customer's real plans.
+ * owed, on auth / focused flows, and before the plans load.
  */
 export function ArrearsBanner() {
   const user = useUserStore((s) => s.user);
   const pathname = usePathname();
+  const [plans, setPlans] = useState<ApiPlan[]>([]);
 
-  /* userStore is not persisted, so `user` is null on both the server and the
-     first client render — no mounted guard needed to avoid a hydration gap. */
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<{ plans: ApiPlan[] }>("/api/me/plans")
+      .then((d) => setPlans(d.plans))
+      .catch(() => setPlans([]));
+  }, [user]);
+
   if (!user || isMinimalChrome(pathname)) return null;
 
   /* One item per plan in arrears — overdue first, then missed. */
-  const items: ArrearsItem[] = MOCK_PLANS.map((plan) => ({ plan, health: planHealth(plan) }))
-    .filter((x) => x.health !== null && isArrears(x.health.status))
-    .map(({ plan, health }) => ({
-      plan,
-      overdue: health!.status === "overdue",
-      amount: health!.arrears,
-      daysOverdue: health!.daysOverdue,
+  const items: ArrearsItem[] = plans
+    .filter((p) => p.health !== null && isArrears(p.health.status))
+    .map((p) => ({
+      id: p.id,
+      productName: p.productName ?? "Your plan",
+      overdue: p.health!.status === "overdue",
+      amount: p.health!.arrears,
+      daysOverdue: p.health!.daysOverdue,
     }))
     .sort((a, b) => Number(b.overdue) - Number(a.overdue));
 
   if (items.length === 0) return null;
 
   const summary = arrearsSummary(
-    MOCK_PLANS.map((p) => planHealth(p)).filter((h) => h !== null),
+    plans.map((p) => p.health).filter((h): h is PaymentHealth => h !== null),
   );
   const hasOverdue = summary.overdueTotal > 0;
 
@@ -62,7 +76,7 @@ export function ArrearsBanner() {
   const track = (
     <div className="flex shrink-0 items-center gap-8 pr-8">
       {items.map((item) => (
-        <span key={item.plan.id} className="flex items-center gap-1.5 whitespace-nowrap text-caption">
+        <span key={item.id} className="flex items-center gap-1.5 whitespace-nowrap text-caption">
           {item.overdue ? (
             <AlertTriangle className={`size-3.5 ${OVERDUE_TEXT}`} />
           ) : (
@@ -72,7 +86,7 @@ export function ArrearsBanner() {
             {item.overdue ? "Overdue" : "Missed"}
           </span>
           <span className="text-white/85">
-            · {item.plan.productName} · <span className="font-semibold text-white">{naira(item.amount)}</span>{" "}
+            · {item.productName} · <span className="font-semibold text-white">{naira(item.amount)}</span>{" "}
             {item.overdue ? `past due (${item.daysOverdue}d)` : "behind"}
           </span>
         </span>

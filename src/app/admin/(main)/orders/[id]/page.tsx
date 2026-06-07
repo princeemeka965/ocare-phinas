@@ -1,26 +1,57 @@
-import type { Metadata } from "next";
+"use client";
+
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { ArrowLeft, Mail, MapPin, MessageCircle, Phone, ShoppingBag } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getOrder, PLAN_META } from "@/lib/orders";
+import { api } from "@/lib/api";
+import { mapApiOrder, PLAN_META, type ApiOrder, type Order } from "@/lib/orders";
 import { waLink } from "@/lib/whatsapp";
 import { StatusManager } from "./status-manager";
 import { PlanPaymentRecord } from "./plan-payment-record";
-
-export const metadata: Metadata = { title: "Order Detail — OCare Phinas Admin" };
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function AdminOrderDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const order = getOrder(id);
-  if (!order) notFound();
+export default function AdminOrderDetailPage({ params }: PageProps) {
+  const { id } = use(params);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ order: ApiOrder }>(`/api/admin/orders/${id}`)
+      .then((d) => setOrder(mapApiOrder(d.order)))
+      .catch(() => setError(true));
+  }, [id]);
+
+  if (error) {
+    return (
+      <div className="max-w-5xl space-y-6">
+        <Link href="/admin/orders" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 -ml-2")}>
+          <ArrowLeft className="size-4" /> All orders
+        </Link>
+        <div className="rounded-2xl border border-dashed border-border p-12 text-center">
+          <ShoppingBag className="size-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-body-sm text-muted-foreground">Order not found.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="max-w-5xl space-y-6">
+        <div className="h-8 w-32 rounded bg-muted animate-pulse" />
+        <div className="h-40 rounded-2xl border border-border bg-card animate-pulse" />
+        <div className="h-64 rounded-2xl border border-border bg-card animate-pulse" />
+      </div>
+    );
+  }
 
   const plan = PLAN_META[order.paymentPlan];
   const PlanIcon = plan.icon;
@@ -35,13 +66,19 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
           {order.items.map((item) => (
             <div key={item.id} className="flex items-center gap-3">
               <div className="size-14 rounded-lg overflow-hidden border border-border bg-muted flex-shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                {item.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center">
+                    <ShoppingBag className="size-5 text-muted-foreground" />
+                  </div>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-body-sm font-semibold line-clamp-1">{item.name}</p>
                 <p className="text-caption text-muted-foreground">
-                  {item.brand} · {item.condition === "new" ? "New" : "Pre-owned"} · Qty {item.qty}
+                  {item.brand ? `${item.brand} · ` : ""}{item.condition === "new" ? "New" : "Pre-owned"} · Qty {item.qty}
                 </p>
               </div>
               <p className="text-body-sm font-bold flex-shrink-0">₦{(item.price * item.qty).toLocaleString("en-NG")}</p>
@@ -127,12 +164,12 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
           orders manage a manual, per-period payment record: the order info sits
           between the record summary and the full schedule pinned to the bottom. */}
       {isPlan && order.plan ? (
-        <PlanPaymentRecord order={{ ...order, plan: order.plan }}>
+        <PlanPaymentRecord orderId={order.id} order={{ ...order, plan: order.plan }}>
           {orderInfo}
         </PlanPaymentRecord>
       ) : (
         <>
-          <StatusManager reference={order.reference} initialStatus={order.status} />
+          <StatusManager orderId={order.id} reference={order.reference} initialStatus={order.status} />
           {orderInfo}
         </>
       )}

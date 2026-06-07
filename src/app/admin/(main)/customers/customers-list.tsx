@@ -1,52 +1,71 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Ban, CheckCircle, Clock, Eye, Search, ShieldCheck, User, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
-import { planScheduleHealth, type Customer } from "@/lib/customers";
-import { HEALTH_META, isArrears, type PaymentHealthStatus } from "@/lib/payment-health";
+import { HEALTH_META } from "@/lib/payment-health";
 
 const PLAN_ICON = { solo: User, group: Users } as const;
 
-/** Worst arrears state across a customer's plans, or null if all clear. */
-function worstArrears(c: Customer): PaymentHealthStatus | null {
-  let worst: PaymentHealthStatus | null = null;
-  for (const plan of c.plans) {
-    const h = planScheduleHealth(plan);
-    if (!h || !isArrears(h.status)) continue;
-    if (h.status === "overdue") return "overdue";
-    worst = "missed";
-  }
-  return worst;
+interface AdminCustomer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  verified: boolean;
+  blocked: boolean;
+  joined: string;
+  orderCount: number;
+  walletBalance: number;
+  plans: { type: "solo" | "group"; reference: string | null }[];
+  arrears: "overdue" | "missed" | null;
 }
 
-export function CustomersList({ customers }: { customers: Customer[] }) {
+export function CustomersList() {
+  const [customers, setCustomers] = useState<AdminCustomer[] | null>(null);
   const [query, setQuery] = useState("");
-  const [blocked, setBlocked] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(customers.map((c) => [c.id, c.blocked])),
-  );
   const [busy, setBusy] = useState<string | null>(null);
 
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? customers.filter((c) =>
-        [c.name, c.email, c.phone].some((v) => v.toLowerCase().includes(q)),
-      )
-    : customers;
+  useEffect(() => {
+    api
+      .get<{ customers: AdminCustomer[] }>("/api/admin/customers")
+      .then((d) => setCustomers(d.customers))
+      .catch(() => setCustomers([]));
+  }, []);
 
-  async function toggleBlock(c: Customer) {
+  const q = query.trim().toLowerCase();
+  const filtered = (customers ?? []).filter((c) =>
+    q ? [c.name, c.email, c.phone].some((v) => v.toLowerCase().includes(q)) : true,
+  );
+
+  async function toggleBlock(c: AdminCustomer) {
     setBusy(c.id);
-    const next = !blocked[c.id];
-    // Phase 3: PATCH /api/admin/customers/:id { blocked: next }
-    await new Promise((r) => setTimeout(r, 500));
-    setBlocked((b) => ({ ...b, [c.id]: next }));
-    setBusy(null);
-    if (next) toast.info(`${c.name} has been blocked.`, "Customer blocked");
-    else toast.success(`${c.name} has been unblocked.`, "Customer unblocked");
+    const next = !c.blocked;
+    try {
+      await api.patch(`/api/admin/customers/${c.id}/block`, { blocked: next });
+      setCustomers((list) => (list ?? []).map((x) => (x.id === c.id ? { ...x, blocked: next } : x)));
+      if (next) toast.info(`${c.name} has been blocked.`, "Customer blocked");
+      else toast.success(`${c.name} has been unblocked.`, "Customer unblocked");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't update this customer.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (customers === null) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-20 rounded-2xl border border-border bg-card animate-pulse" />
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -64,13 +83,13 @@ export function CustomersList({ customers }: { customers: Customer[] }) {
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-12 text-center text-body-sm text-muted-foreground">
-          No customers match &ldquo;{query}&rdquo;.
+          {q ? `No customers match “${query.trim()}”.` : "No customers yet."}
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((c) => {
-            const isBlocked = blocked[c.id];
-            const arrears = worstArrears(c);
+            const isBlocked = c.blocked;
+            const arrears = c.arrears;
             return (
               <div
                 key={c.id}
@@ -93,11 +112,11 @@ export function CustomersList({ customers }: { customers: Customer[] }) {
                       {c.plans.length === 0 ? (
                         <span className="text-micro text-muted-foreground">No plan</span>
                       ) : (
-                        c.plans.map((p) => {
+                        c.plans.map((p, idx) => {
                           const Icon = PLAN_ICON[p.type];
                           return (
-                            <Badge key={p.reference} variant="secondary" className="text-micro gap-1">
-                              <Icon className="size-3" />{p.type === "solo" ? "Solo" : "Group"} · {p.reference}
+                            <Badge key={p.reference ?? idx} variant="secondary" className="text-micro gap-1">
+                              <Icon className="size-3" />{p.type === "solo" ? "Solo" : "Group"}{p.reference ? ` · ${p.reference}` : ""}
                             </Badge>
                           );
                         })
