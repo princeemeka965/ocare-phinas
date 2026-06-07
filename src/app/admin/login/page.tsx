@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 import { useAdminStore } from "@/store/adminStore";
-import { landingRoute } from "@/lib/admin-access";
+import { landingRoute, type AdminAccount } from "@/lib/admin-access";
+import { api, ApiError } from "@/lib/api";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const signIn = useAdminStore((s) => s.signIn);
+  const setSession = useAdminStore((s) => s.setSession);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,15 +22,14 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    // Phase 3: verify credentials server-side; the server returns role + permissions.
-    await new Promise((r) => setTimeout(r, 600));
-    const account = password.trim() ? signIn(email) : null;
-    if (!account) {
-      setError("Invalid credentials.");
+    try {
+      const { admin } = await api.post<{ admin: AdminAccount }>("/api/admin/login", { email, password });
+      setSession(admin);
+      router.push(landingRoute(admin));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not log in. Please try again.");
       setLoading(false);
-      return;
     }
-    router.push(landingRoute(account));
   }
 
   return (
@@ -74,12 +74,11 @@ export default function AdminLoginPage() {
             </button>
           </form>
 
-          {/* Mock accounts — Phase 3 removes this; credentials live server-side. */}
+          {/* Seeded super admin — remove before production. */}
           <div className="mt-5 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 text-micro text-muted-foreground space-y-0.5">
-            <p className="font-semibold text-foreground/70">Demo accounts (any password)</p>
-            <p>Super: <span className="font-mono">anyanwue4@gmail.com</span></p>
-            <p>Sub (orders, arrears, customers): <span className="font-mono">ifeoma@ocarephinas.com</span></p>
-            <p>Sub (products, categories): <span className="font-mono">tunde@ocarephinas.com</span></p>
+            <p className="font-semibold text-foreground/70">Seeded super admin</p>
+            <p><span className="font-mono">admin@ocarephinas.com</span> · password from <span className="font-mono">SEED_ADMIN_PASSWORD</span></p>
+            <p>Create sub-admins from Team &amp; permissions after signing in.</p>
           </div>
         </div>
         <p className="text-center text-caption text-muted-foreground mt-6">Admin access only. Unauthorized access is prohibited.</p>

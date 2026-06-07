@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users, GitFork, Settings,
-  ShieldCheck, LogOut, Menu, X, ChevronRight, AlertTriangle, Lock, Eye, UserCog,
+  ShieldCheck, LogOut, Menu, X, ChevronRight, AlertTriangle, Lock, Eye, UserCog, Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { useAdminStore } from "@/store/adminStore";
-import { hasPermission, permissionForPath, PERMISSION_META, type AdminPermission } from "@/lib/admin-access";
+import { hasPermission, permissionForPath, PERMISSION_META, type AdminAccount, type AdminPermission } from "@/lib/admin-access";
+import { api } from "@/lib/api";
 
 interface NavItem {
   label: string;
@@ -41,11 +42,45 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
 
 export default function AdminMainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const status = useAdminStore((s) => s.status);
   const current = useAdminStore((s) => s.current);
   const previewing = useAdminStore((s) => s.previewing);
   const exitPreview = useAdminStore((s) => s.exitPreview);
+  const setSession = useAdminStore((s) => s.setSession);
+  const clearSession = useAdminStore((s) => s.clearSession);
+
+  /* Hydrate the admin session from the cookie on mount. */
+  useEffect(() => {
+    let active = true;
+    api
+      .get<{ admin: AdminAccount | null }>("/api/admin/me")
+      .then((d) => { if (active) (d.admin ? setSession(d.admin) : clearSession()); })
+      .catch(() => { if (active) clearSession(); });
+    return () => { active = false; };
+  }, [setSession, clearSession]);
+
+  /* Not signed in → go to the admin login. */
+  useEffect(() => {
+    if (status === "guest") router.replace("/admin/login");
+  }, [status, router]);
+
+  async function logout() {
+    await api.post("/api/admin/logout").catch(() => {});
+    clearSession();
+    router.replace("/admin/login");
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (!current) return null; // guest — redirect effect handles navigation
 
   /* Only sections with at least one permitted item are shown. */
   const sections = NAV_SECTIONS
@@ -110,9 +145,9 @@ export default function AdminMainLayout({ children }: { children: React.ReactNod
           >
             <UserCog className="size-4" /> My account
           </Link>
-          <Link href="/admin/login" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+          <button onClick={logout} className="flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-body-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
             <LogOut className="size-4" /> Log out
-          </Link>
+          </button>
         </div>
       </aside>
 

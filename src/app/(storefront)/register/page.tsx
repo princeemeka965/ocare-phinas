@@ -8,6 +8,11 @@ import { Eye, EyeOff, UserPlus } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/store/userStore";
+import { api, ApiError } from "@/lib/api";
+
+interface AuthResponse {
+  customer: { id: string; name: string; email: string };
+}
 
 /** Only allow internal redirect targets (avoid open redirects). */
 function safeNext(raw: string | null): string {
@@ -49,12 +54,20 @@ function RegisterForm() {
 
     setErrors({});
     setLoading(true);
-    // Phase 3: wire up registration API → OTP verification.
-    // For now, create the account session immediately.
-    await new Promise((r) => setTimeout(r, 1000));
-    setUser({ id: "u-demo", email, name: name.trim() || email.split("@")[0] });
-    setLoading(false);
-    router.push(next);
+    try {
+      const { customer } = await api.post<AuthResponse>("/api/auth/register", {
+        name: name.trim(),
+        email,
+        phone: phone.replace(/\s/g, ""),
+        password,
+      });
+      setUser({ id: customer.id, email: customer.email, name: customer.name });
+      // Phase 3: optionally route to phone OTP verification before continuing.
+      router.push(pssOptIn ? "/pay-small-small" : next);
+    } catch (err) {
+      setErrors({ form: err instanceof ApiError ? err.message : "Could not create your account. Please try again." });
+      setLoading(false);
+    }
   }
 
   const field = (id: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -131,6 +144,10 @@ function RegisterForm() {
               </div>
             </label>
           </div>
+
+          {errors.form && (
+            <p className="text-caption text-destructive bg-destructive/10 rounded-lg px-3 py-2">{errors.form}</p>
+          )}
 
           <Button type="submit" size="lg" className="w-full gap-2" disabled={loading}>
             <UserPlus className="size-4" />

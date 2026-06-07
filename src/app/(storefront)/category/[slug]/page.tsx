@@ -6,43 +6,10 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  ProductCard,
-  ProductCardSkeleton,
-  type ProductCardData,
-} from "@/components/storefront/product-card";
+import { ProductCard, ProductCardSkeleton } from "@/components/storefront/product-card";
+import { listProducts, getCategoryBySlug, listBrandNames } from "@/lib/server/catalog";
 
-/* ------------------------------------------------------------------ */
-/* Mock data — replace with DB query in Phase 3                        */
-/* ------------------------------------------------------------------ */
-const ALL_PRODUCTS: ProductCardData[] = [
-  { id: "1", name: "Samsung Galaxy S24 Ultra 256GB", slug: "samsung-galaxy-s24-ultra-256gb", brand: "Samsung", price: 65990, stockQuantity: 12, stockLabel: "In stock", categorySlug: "phones", condition: "new", badge: "Bestseller", image: "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=800&h=600&fit=crop&q=85" },
-  { id: "2", name: "iPhone 15 Pro Max 256GB", slug: "iphone-15-pro-max", brand: "Apple", price: 89990, stockQuantity: 6, stockLabel: "In stock", categorySlug: "phones", condition: "new", image: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=800&h=600&fit=crop&q=85" },
-  { id: "3", name: "iPhone 13 Pro 256GB (UK Used)", slug: "iphone-13-pro-uk-used", brand: "Apple", price: 34990, stockQuantity: 4, stockLabel: "In stock", categorySlug: "phones", condition: "pre_owned", image: "https://images.unsplash.com/photo-1632661674596-df8be070a5c5?w=800&h=600&fit=crop&q=85" },
-  { id: "4", name: "Tecno Camon 20 Pro", slug: "tecno-camon-20-pro", brand: "Tecno", price: 19500, stockQuantity: 15, stockLabel: "In stock", categorySlug: "phones", condition: "new", image: "https://images.unsplash.com/photo-1512499617640-c74ae3a79d37?w=800&h=600&fit=crop&q=85" },
-  { id: "5", name: "Apple MacBook Air 13-inch M3", slug: "apple-macbook-air-13-m3", brand: "Apple", price: 79990, stockQuantity: 5, stockLabel: "Low stock", categorySlug: "laptops", condition: "new", badge: "New", image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&h=600&fit=crop&q=85" },
-  { id: "6", name: "Dell XPS 13 (Tokunbo)", slug: "dell-xps-13-tokunbo", brand: "Dell", price: 38500, stockQuantity: 2, stockLabel: "Low stock", categorySlug: "laptops", condition: "pre_owned", image: "https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=800&h=600&fit=crop&q=85" },
-  { id: "7", name: "Sony WH-1000XM5 Headphones", slug: "sony-wh-1000xm5", brand: "Sony", price: 22990, stockQuantity: 8, stockLabel: "In stock", categorySlug: "audio", condition: "new", image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=600&fit=crop&q=85" },
-  { id: "8", name: 'LG OLED 55" 4K Smart TV', slug: "lg-oled-55-c3", brand: "LG", price: 89990, stockQuantity: 3, stockLabel: "Low stock", categorySlug: "appliances", condition: "new", image: "https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&h=600&fit=crop&q=85" },
-  { id: "9", name: "Binatone Standing Fan 16-inch", slug: "binatone-fan-16", brand: "Binatone", price: 12500, stockQuantity: 20, stockLabel: "In stock", categorySlug: "appliances", condition: "new", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop&q=85" },
-  { id: "10", name: "Panasonic Microwave Oven 20L", slug: "panasonic-microwave-20l", brand: "Panasonic", price: 18900, stockQuantity: 7, stockLabel: "In stock", categorySlug: "appliances", condition: "new", image: "https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?w=800&h=600&fit=crop&q=85" },
-  { id: "11", name: "Samsung Galaxy Tab A8", slug: "samsung-galaxy-tab-a8", brand: "Samsung", price: 28900, stockQuantity: 9, stockLabel: "In stock", categorySlug: "tablets", condition: "new", image: "https://images.unsplash.com/photo-1561154464-82e9adf32764?w=800&h=600&fit=crop&q=85" },
-  { id: "12", name: "Nikon D3500 DSLR (UK Used)", slug: "nikon-d3500-uk-used", brand: "Nikon", price: 42000, stockQuantity: 1, stockLabel: "Low stock", categorySlug: "cameras", condition: "pre_owned", image: "https://images.unsplash.com/photo-1510127034890-ba27508e9f1c?w=800&h=600&fit=crop&q=85" },
-];
-
-const BRANDS = ["Apple", "Samsung", "Sony", "LG", "Dell", "Tecno", "Binatone", "Panasonic", "Nikon"];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  phones: "Phones & Mobile",
-  laptops: "Laptops",
-  tablets: "Tablets",
-  audio: "Audio & Headphones",
-  appliances: "Home Appliances",
-  accessories: "Accessories",
-  gaming: "Gaming",
-  cameras: "Cameras",
-  "pre-owned": "Pre-owned (Tokunbo / UK Used)",
-};
+const PREOWNED_SLUG = "pre-owned";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -58,7 +25,9 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const label = CATEGORY_LABELS[slug] ?? slug;
+  const isPreowned = slug === PREOWNED_SLUG;
+  const category = isPreowned ? null : await getCategoryBySlug(slug);
+  const label = isPreowned ? "Pre-owned (Tokunbo / UK Used)" : category?.name ?? slug;
   return {
     title: `${label} — OCare Phinas`,
     description: `Shop genuine ${label.toLowerCase()} in Nigeria. Bank transfer payment with manual confirmation.`,
@@ -69,21 +38,21 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   const { slug } = await params;
   const filters = await searchParams;
 
-  const label = CATEGORY_LABELS[slug] ?? slug;
-  const isPreowned = slug === "pre-owned";
+  const isPreowned = slug === PREOWNED_SLUG;
+  const category = isPreowned ? null : await getCategoryBySlug(slug);
+  const label = isPreowned ? "Pre-owned (Tokunbo / UK Used)" : category?.name ?? slug;
 
-  /* Filter products */
-  let products = isPreowned
-    ? ALL_PRODUCTS.filter((p) => p.condition === "pre_owned")
-    : ALL_PRODUCTS.filter((p) => p.categorySlug === slug);
-
-  if (filters.brand) products = products.filter((p) => p.brand === filters.brand);
-  if (filters.condition === "new") products = products.filter((p) => p.condition === "new");
-  if (filters.condition === "pre_owned") products = products.filter((p) => p.condition === "pre_owned");
-  if (filters.instock === "1") products = products.filter((p) => p.stockQuantity > 0);
-
-  if (filters.sort === "price_asc") products = [...products].sort((a, b) => a.price - b.price);
-  if (filters.sort === "price_desc") products = [...products].sort((a, b) => b.price - a.price);
+  /* Pre-owned is a condition view; otherwise filter by this category slug. */
+  const [products, brands] = await Promise.all([
+    listProducts({
+      ...(isPreowned ? { condition: "used" } : { category: slug }),
+      brand: filters.brand,
+      condition: isPreowned ? "used" : filters.condition,
+      instock: filters.instock,
+      sort: filters.sort,
+    }),
+    listBrandNames(),
+  ]);
 
   const activeFilters = [
     filters.brand && `Brand: ${filters.brand}`,
@@ -114,7 +83,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar filters — desktop */}
           <aside className="hidden lg:block w-56 flex-shrink-0 space-y-6" aria-label="Filters">
-            <FilterPanel slug={slug} filters={filters} isPreowned={isPreowned} />
+            <FilterPanel slug={slug} filters={filters} isPreowned={isPreowned} brands={brands} />
           </aside>
 
           {/* Main content */}
@@ -185,10 +154,12 @@ function FilterPanel({
   slug,
   filters,
   isPreowned,
+  brands,
 }: {
   slug: string;
   filters: { brand?: string; condition?: string; instock?: string };
   isPreowned: boolean;
+  brands: string[];
 }) {
   return (
     <div className="space-y-6">
@@ -196,7 +167,7 @@ function FilterPanel({
       <div>
         <h3 className="text-body-sm font-semibold mb-3">Brand</h3>
         <div className="space-y-1.5">
-          {BRANDS.map((brand) => (
+          {brands.map((brand) => (
             <label key={brand} className="flex items-center gap-2.5 cursor-pointer group">
               <input
                 type="checkbox"

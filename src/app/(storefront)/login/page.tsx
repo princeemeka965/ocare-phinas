@@ -10,16 +10,10 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/store/userStore";
+import { api, ApiError } from "@/lib/api";
 
-/** Derive a display name from the email local part (mock only). */
-function nameFromEmail(email: string): string {
-  const local = email.split("@")[0] || "Customer";
-  return (
-    local
-      .replace(/[._-]+/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .trim() || "Customer"
-  );
+interface AuthResponse {
+  customer: { id: string; name: string; email: string };
 }
 
 /** Only allow internal redirect targets (avoid open redirects). */
@@ -42,12 +36,16 @@ function LoginForm() {
     setError("");
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const email = ((fd.get("email") as string) || "").trim();
-    // Phase 3: wire up real auth API. For now any credentials sign you in.
-    await new Promise((r) => setTimeout(r, 600));
-    setUser({ id: "u-demo", email, name: nameFromEmail(email) });
-    setLoading(false);
-    router.push(next);
+    const emailOrPhone = ((fd.get("email") as string) || "").trim();
+    const password = (fd.get("password") as string) || "";
+    try {
+      const { customer } = await api.post<AuthResponse>("/api/auth/login", { emailOrPhone, password });
+      setUser({ id: customer.id, email: customer.email, name: customer.name });
+      router.push(next);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not log in. Please try again.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -91,6 +89,7 @@ function LoginForm() {
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 required

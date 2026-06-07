@@ -25,14 +25,12 @@ import {
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  ProductCard,
-  type ProductCardData,
-} from "@/components/storefront/product-card";
+import { ProductCard, type ProductCardData } from "@/components/storefront/product-card";
 import { HeroSection } from "@/components/storefront/hero-section";
 import { BrandLogo } from "@/components/storefront/brand-logo";
 import { CategoryImage } from "@/components/storefront/category-image";
 import { BRANDS, brandHref } from "@/lib/brands";
+import { listProducts } from "@/lib/server/catalog";
 
 export const metadata: Metadata = {
   title: "OCare Phinas — Electronics Store Nigeria",
@@ -48,114 +46,7 @@ export const metadata: Metadata = {
 /* ------------------------------------------------------------------ */
 /* Mock data — replace with server fetch in Phase 3                     */
 /* ------------------------------------------------------------------ */
-const FEATURED_PRODUCTS: ProductCardData[] = [
-  {
-    id: "1",
-    name: "Samsung Galaxy S24 Ultra 256GB",
-    slug: "samsung-galaxy-s24-ultra-256gb",
-    brand: "Samsung",
-    price: 65990,
-    stockQuantity: 12,
-    stockLabel: "In stock",
-    categorySlug: "phones",
-    condition: "new",
-    badge: "Bestseller",
-    image:
-      "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "2",
-    name: "Apple MacBook Air 13-inch M3",
-    slug: "apple-macbook-air-13-m3",
-    brand: "Apple",
-    price: 79990,
-    stockQuantity: 5,
-    stockLabel: "Low stock",
-    categorySlug: "laptops",
-    condition: "new",
-    badge: "New",
-    image:
-      "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "3",
-    name: "Sony WH-1000XM5 Wireless Headphones",
-    slug: "sony-wh-1000xm5",
-    brand: "Sony",
-    price: 22990,
-    stockQuantity: 8,
-    stockLabel: "In stock",
-    categorySlug: "audio",
-    condition: "new",
-    image:
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "4",
-    name: 'LG OLED evo C3 55" 4K Smart TV',
-    slug: "lg-oled-evo-55-c3",
-    brand: "LG",
-    price: 89990,
-    stockQuantity: 3,
-    stockLabel: "Low stock",
-    categorySlug: "appliances",
-    condition: "new",
-    image:
-      "https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "5",
-    name: "iPhone 13 Pro 256GB (UK Used)",
-    slug: "iphone-13-pro-256gb-uk-used",
-    brand: "Apple",
-    price: 34990,
-    stockQuantity: 4,
-    stockLabel: "In stock",
-    categorySlug: "phones",
-    condition: "pre_owned",
-    image:
-      "https://images.unsplash.com/photo-1632661674596-df8be070a5c5?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "6",
-    name: "Dell XPS 13 Laptop (Tokunbo)",
-    slug: "dell-xps-13-tokunbo",
-    brand: "Dell",
-    price: 38500,
-    stockQuantity: 2,
-    stockLabel: "Low stock",
-    categorySlug: "laptops",
-    condition: "pre_owned",
-    image:
-      "https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "7",
-    name: "Binatone Standing Fan 16-inch",
-    slug: "binatone-standing-fan-16",
-    brand: "Binatone",
-    price: 12500,
-    stockQuantity: 20,
-    stockLabel: "In stock",
-    categorySlug: "appliances",
-    condition: "new",
-    image:
-      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop&q=85",
-  },
-  {
-    id: "8",
-    name: "Panasonic Microwave Oven 20L",
-    slug: "panasonic-microwave-20l",
-    brand: "Panasonic",
-    price: 18900,
-    stockQuantity: 7,
-    stockLabel: "In stock",
-    categorySlug: "appliances",
-    condition: "new",
-    image:
-      "https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?w=800&h=600&fit=crop&q=85",
-  },
-];
+/* Featured products are fetched from the DB in HomePage(). */
 
 const CATEGORIES = [
   { name: "Phones", slug: "phones", icon: Smartphone, image: "/categories/phones.png", color: "text-cyan-500" },
@@ -212,8 +103,9 @@ const TRUST_POINTS = [
 /* ------------------------------------------------------------------ */
 /* Page                                                                 */
 /* ------------------------------------------------------------------ */
-export default function HomePage() {
-  const hasFeatured = FEATURED_PRODUCTS.length > 0;
+export default async function HomePage() {
+  const featuredProducts = await listProducts({ instock: "1" }, 8);
+  const hasFeatured = featuredProducts.length > 0;
 
   return (
     <>
@@ -221,7 +113,7 @@ export default function HomePage() {
       <PaySmallSmallPromo />
       <CategoryTiles />
       <BrandStrip />
-      <FeaturedSection hasFeatured={hasFeatured} />
+      <FeaturedSection hasFeatured={hasFeatured} products={featuredProducts} />
       <TrustStrip />
     </>
   );
@@ -461,7 +353,7 @@ function BrandStrip() {
 /* ------------------------------------------------------------------ */
 /* Featured products                                                    */
 /* ------------------------------------------------------------------ */
-function FeaturedSection({ hasFeatured }: { hasFeatured: boolean }) {
+function FeaturedSection({ hasFeatured, products }: { hasFeatured: boolean; products: ProductCardData[] }) {
   return (
     <section
       aria-labelledby="featured-heading"
@@ -492,7 +384,7 @@ function FeaturedSection({ hasFeatured }: { hasFeatured: boolean }) {
 
         {hasFeatured ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {FEATURED_PRODUCTS.slice(0, 8).map((product) => (
+            {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/store/toastStore";
 import { useAdminStore } from "@/store/adminStore";
 import { PERMISSION_META } from "@/lib/admin-access";
+import { api, ApiError } from "@/lib/api";
 
 const INPUT_CLASS =
   "w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors";
@@ -20,7 +21,7 @@ export default function AdminAccountPage() {
   const [confirmPw, setConfirmPw] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const initials = current.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
+  const initials = current ? current.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() : "";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,15 +38,20 @@ export default function AdminAccountPage() {
       return;
     }
     setSaving(true);
-    // Phase 3: PATCH /api/admin/me/password { currentPassword, newPassword } —
-    // verifies the current password server-side before updating the hash.
-    await new Promise((r) => setTimeout(r, 700));
-    setSaving(false);
-    setCurrentPw("");
-    setNewPw("");
-    setConfirmPw("");
-    toast.success("Your password has been updated.", "Password changed");
+    try {
+      await api.patch("/api/admin/me/password", { currentPassword: currentPw, newPassword: newPw });
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+      toast.success("Your password has been updated.", "Password changed");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not update your password.", "Failed");
+    } finally {
+      setSaving(false);
+    }
   }
+
+  if (!current) return null;
 
   return (
     <div className="space-y-6 max-w-3xl">

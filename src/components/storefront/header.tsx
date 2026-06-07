@@ -27,6 +27,7 @@ import { useCartStore, cartItemCount } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { Logo } from "@/components/storefront/logo";
 import { isMinimalChrome } from "@/lib/chrome-routes";
+import { api } from "@/lib/api";
 
 const PRIMARY_NAV = [
   { label: "Shop All", href: "/products", icon: ShoppingBag },
@@ -46,6 +47,11 @@ export function StorefrontHeader() {
   const user = useUserStore((s) => s.user);
   const clearUser = useUserStore((s) => s.clearUser);
   const accountRef = useRef<HTMLDivElement>(null);
+
+  async function logout() {
+    await api.post("/api/auth/logout").catch(() => {});
+    clearUser();
+  }
   const pathname = usePathname();
   const minimal = isMinimalChrome(pathname);
 
@@ -206,7 +212,7 @@ export function StorefrontHeader() {
                       <button
                         role="menuitem"
                         onClick={() => {
-                          clearUser();
+                          logout();
                           setAccountOpen(false);
                         }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-body-sm text-destructive hover:bg-destructive/10 rounded-lg mx-1 transition-colors"
@@ -386,7 +392,7 @@ export function StorefrontHeader() {
               <hr className="my-2 border-border" />
               <button
                 onClick={() => {
-                  clearUser();
+                  logout();
                   setMobileOpen(false);
                 }}
                 className="flex w-full items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm text-destructive hover:bg-destructive/10 transition-colors"
