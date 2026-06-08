@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { SLOT_DAILY, CYCLE_DAYS, SLOT_CYCLE_VALUE, GROUP_PRICE_CAP, naira } from "@/lib/pay-small-small";
+import { SLOT_DAILY, CYCLE_DAYS, SLOT_CYCLE_VALUE, GROUP_PRICE_CAP, isPlanOngoing, naira } from "@/lib/pay-small-small";
+import { ActivePlanNotice } from "@/components/storefront/active-plan-notice";
 
 interface Group {
   id: string;
@@ -22,17 +23,35 @@ interface Group {
   slotsAvailable: number;
 }
 
+/** Minimal shape of a plan from /api/me/plans, for the one-group-at-a-time cap. */
+interface MyPlan {
+  type: "solo" | "group";
+  status: string;
+  productName: string | null;
+}
+
 function JoinGroupInner() {
   const params = useSearchParams();
   const itemQuery = params.toString();
   const [groups, setGroups] = useState<Group[] | null>(null);
+  const [myPlans, setMyPlans] = useState<MyPlan[] | null>(null);
 
   useEffect(() => {
     api
       .get<{ groups: Group[] }>("/api/groups")
       .then((d) => setGroups(d.groups))
       .catch(() => setGroups([]));
+    api
+      .get<{ plans: MyPlan[] }>("/api/me/plans")
+      .then((d) => setMyPlans(d.plans))
+      .catch(() => setMyPlans([]));
   }, []);
+
+  /* One group at a time (§1) — block browsing-to-join when already in one. */
+  const ongoingGroup = myPlans?.find((p) => p.type === "group" && isPlanOngoing(p.status)) ?? null;
+  if (ongoingGroup) {
+    return <ActivePlanNotice type="group" productName={ongoingGroup.productName} />;
+  }
 
   /* Carry any deep-linked item (from a product page) through to the confirm step. */
   const joinHref = (id: string) =>

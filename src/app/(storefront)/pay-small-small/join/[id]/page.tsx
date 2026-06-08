@@ -24,6 +24,7 @@ import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import { ActivePlanNotice } from "@/components/storefront/active-plan-notice";
 import {
   DeliveryFields,
   emptyDeliveryForm,
@@ -39,6 +40,7 @@ import {
   isGroupEligible,
   groupSlotsForPrice,
   dailyForSlots,
+  isPlanOngoing,
   naira,
 } from "@/lib/pay-small-small";
 
@@ -50,6 +52,13 @@ interface Group {
   slotsFilled: number;
   cycleLengthDays: number;
   slotsAvailable: number;
+}
+
+/** Minimal shape of a plan from /api/me/plans, for the one-group-at-a-time cap. */
+interface MyPlan {
+  type: "solo" | "group";
+  status: string;
+  productName: string | null;
 }
 
 const HOW_IT_WORKS = [
@@ -65,6 +74,7 @@ function JoinGroupConfirmInner() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [groups, setGroups] = useState<Group[] | null>(null);
+  const [myPlans, setMyPlans] = useState<MyPlan[] | null>(null);
   const [step, setStep] = useState<"confirm" | "done">("confirm");
   const [joining, setJoining] = useState(false);
 
@@ -89,7 +99,12 @@ function JoinGroupConfirmInner() {
   useEffect(() => {
     api.get<{ groups: Group[] }>("/api/groups").then((d) => setGroups(d.groups)).catch(() => setGroups([]));
     api.get<{ settings: { deliveryFee: number } }>("/api/settings").then((d) => setDeliveryFee(d.settings.deliveryFee)).catch(() => {});
+    api.get<{ plans: MyPlan[] }>("/api/me/plans").then((d) => setMyPlans(d.plans)).catch(() => setMyPlans([]));
   }, []);
+
+  /* One group at a time (§1): an ongoing group plan blocks joining another. A
+     running solo plan is fine — solo and group can run together. */
+  const ongoingGroup = myPlans?.find((p) => p.type === "group" && isPlanOngoing(p.status)) ?? null;
 
   /* Target item carried from a product page (productId required to join). */
   const productId = search.get("productId");
@@ -114,7 +129,7 @@ function JoinGroupConfirmInner() {
   }
 
   /* ----------------------------- LOADING ---------------------------- */
-  if (groups === null) {
+  if (groups === null || myPlans === null) {
     return (
       <div className="py-8 sm:py-12">
         <Container className="max-w-2xl">
@@ -232,6 +247,11 @@ function JoinGroupConfirmInner() {
         </Container>
       </div>
     );
+  }
+
+  /* ------------- ALREADY IN A GROUP (one at a time, §1) ------------- */
+  if (ongoingGroup) {
+    return <ActivePlanNotice type="group" productName={ongoingGroup.productName} />;
   }
 
   async function join() {

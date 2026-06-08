@@ -8,8 +8,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { planPeriods } from "@/lib/payment-health";
+import { ONGOING_PLAN_STATUSES } from "@/lib/pay-small-small";
 
-const NON_FINAL_PLAN = ["active", "processing", "delivered", "awaiting_substitution"] as const;
+const NON_FINAL_PLAN = ONGOING_PLAN_STATUSES;
 
 /** A unique order reference, e.g. OCP-2026-04821. */
 export async function nextOrderReference(): Promise<string> {

@@ -4,6 +4,7 @@ import { StorefrontFooter } from "@/components/storefront/footer";
 import { HideOnMinimal } from "@/components/storefront/hide-on-minimal";
 import { FooterGate } from "@/components/storefront/footer-gate";
 import { ArrearsBanner } from "@/components/storefront/arrears-banner";
+import { WelcomeModal } from "@/components/storefront/welcome-modal";
 
 export default function StorefrontLayout({
   children,
@@ -21,6 +22,7 @@ export default function StorefrontLayout({
       <HideOnMinimal>
         <CategoryNav />
       </HideOnMinimal>
+      <WelcomeModal />
       <main id="main-content" className="flex-1">
         {children}
       </main>

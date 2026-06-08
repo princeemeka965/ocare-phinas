@@ -8,6 +8,7 @@ import { Eye, EyeOff, UserPlus } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/store/userStore";
+import { WELCOME_KEY } from "@/components/storefront/welcome-modal";
 import { api, ApiError } from "@/lib/api";
 
 interface AuthResponse {
@@ -26,6 +27,7 @@ function RegisterForm() {
   const next = safeNext(params.get("next"));
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -61,6 +63,8 @@ function RegisterForm() {
         password,
       });
       setUser({ id: customer.id, email: customer.email, name: customer.name });
+      // Greet the new customer with a one-time welcome banner on the next page.
+      sessionStorage.setItem(WELCOME_KEY, customer.name.trim().split(" ")[0] || "");
       // Phase 3: optionally route to phone OTP verification before continuing.
       router.push(next);
     } catch (err) {
@@ -124,7 +128,29 @@ function RegisterForm() {
             {errors.password && <p className="text-caption text-destructive">{errors.password}</p>}
           </div>
 
-          {field("confirm", "Confirm password", { type: "password", autoComplete: "new-password", required: true, placeholder: "Repeat your password" })}
+          <div className="space-y-1.5">
+            <label htmlFor="confirm" className="text-body-sm font-medium">Confirm password</label>
+            <div className="relative">
+              <input
+                id="confirm"
+                name="confirm"
+                type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                placeholder="Repeat your password"
+                className="w-full h-10 pl-3 pr-10 rounded-lg border border-input bg-background text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={showConfirm ? "Hide password" : "Show password"}
+              >
+                {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            {errors.confirm && <p className="text-caption text-destructive">{errors.confirm}</p>}
+          </div>
 
           {errors.form && (
             <p className="text-caption text-destructive bg-destructive/10 rounded-lg px-3 py-2">{errors.form}</p>

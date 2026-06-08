@@ -39,6 +39,25 @@ export const SOLO_DELIVERY_THRESHOLD = 0.5;
 
 export type PaymentOption = "outright" | "solo" | "group";
 
+/**
+ * Plan statuses that still count as "ongoing" for the one-per-type cap (§1):
+ * a customer may hold at most one ongoing Solo plan AND one ongoing Group plan
+ * at a time. Only a fully-paid (`completed`) plan frees its type — for Group
+ * that also removes the membership and frees the slot to join another group.
+ * Mirrors the server's NON_FINAL_PLAN in `src/lib/server/lifecycle.ts`.
+ */
+export const ONGOING_PLAN_STATUSES = [
+  "active",
+  "processing",
+  "delivered",
+  "awaiting_substitution",
+] as const;
+
+/** Whether a plan status still ties up its per-type slot (i.e. not yet completed). */
+export function isPlanOngoing(status: string): boolean {
+  return (ONGOING_PLAN_STATUSES as readonly string[]).includes(status);
+}
+
 /** Slots required to cover a product price: ceil(price / 50,000). */
 export function slotsForPrice(price: number): number {
   return Math.max(1, Math.ceil(price / SLOT_CYCLE_VALUE));

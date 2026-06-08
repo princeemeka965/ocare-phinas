@@ -13,6 +13,7 @@ import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import { ActivePlanNotice } from "@/components/storefront/active-plan-notice";
 import {
   DeliveryFields,
   emptyDeliveryForm,
@@ -24,9 +25,17 @@ import {
   soloPlanMath,
   naira,
   suggestedSoloAmount,
+  isPlanOngoing,
   SOLO_FREQUENCIES,
   type SoloFrequency,
 } from "@/lib/pay-small-small";
+
+/** Minimal shape of a plan from /api/me/plans, for the one-per-type cap check. */
+interface MyPlan {
+  type: "solo" | "group";
+  status: string;
+  productName: string | null;
+}
 
 /* ------------------------------------------------------------------ */
 /* Solo Plan (payment-flow §3, §5.2)                                   */
@@ -65,6 +74,10 @@ function SoloPlanInner() {
   const [items, setItems] = useState<SoloItem[]>([]);
   const [starting, setStarting] = useState(false);
 
+  /* The customer's existing plans — used to enforce one ongoing solo plan (§1).
+     `null` while loading; `[]` when signed out or none. */
+  const [myPlans, setMyPlans] = useState<MyPlan[] | null>(null);
+
   /* Door delivery vs. store pickup — the fee (delivery only) folds into the plan total. */
   const [delivery, setDelivery] = useState<DeliveryForm>(emptyDeliveryForm);
   const [deliveryFee, setDeliveryFee] = useState(0);
@@ -79,7 +92,14 @@ function SoloPlanInner() {
       .get<{ settings: { deliveryFee: number } }>("/api/settings")
       .then((d) => setDeliveryFee(d.settings.deliveryFee))
       .catch(() => {});
+    api
+      .get<{ plans: MyPlan[] }>("/api/me/plans")
+      .then((d) => setMyPlans(d.plans))
+      .catch(() => setMyPlans([]));
   }, []);
+
+  /* An ongoing solo plan blocks starting another (a group plan does not). */
+  const ongoingSolo = myPlans?.find((p) => p.type === "solo" && isPlanOngoing(p.status)) ?? null;
 
   const fee = delivery.method === "delivery" ? deliveryFee : 0;
 
@@ -179,6 +199,12 @@ function SoloPlanInner() {
         </Container>
       </div>
     );
+  }
+
+  /* ---------------- ALREADY HAS AN ONGOING SOLO PLAN -------------- */
+  /* One ongoing solo plan at a time (§1). A running group plan is fine. */
+  if (ongoingSolo) {
+    return <ActivePlanNotice type="solo" productName={ongoingSolo.productName} />;
   }
 
   /* -------------------------- CONFIGURE --------------------------- */
@@ -350,7 +376,8 @@ function SoloPlanInner() {
 
           <p className="text-caption text-muted-foreground mb-5">
             No interest, no penalties. Missing a payment just pauses your progress. Money paid in can only ever become a
-            product — there are no withdrawals. You can run more than one plan at a time.
+            product — there are no withdrawals. You can run one solo plan and one group plan at a time — finish a solo
+            plan before starting another.
           </p>
 
           <Button size="lg" className="w-full gap-2" disabled={!math || !amountValid || starting} onClick={startPlan}>
