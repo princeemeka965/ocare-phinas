@@ -33,6 +33,7 @@ interface ApiPlan {
   productName: string | null;
   productImage: string | null;
   productPrice: number;
+  deliveryFee: number;
   perPayment: number;
   frequency: SoloFrequency;
   slots: number;
@@ -220,10 +221,12 @@ export function MyPlanBoard() {
             {plans.map((plan) => {
               const TypeIcon = TYPE_META[plan.type].icon;
               const statusMeta = STATUS_META[plan.status];
-              const progress = Math.min(100, (plan.amountAllocated / plan.productPrice) * 100);
+              // The schedule collects the product price plus any door-delivery fee.
+              const scheduleTotal = plan.productPrice + plan.deliveryFee;
+              const progress = Math.min(100, (plan.amountAllocated / scheduleTotal) * 100);
               const deliveryTarget = plan.productPrice * SOLO_DELIVERY_THRESHOLD;
               const soloDelivered = plan.type === "solo" && plan.amountAllocated >= deliveryTarget;
-              const balance = Math.max(0, plan.productPrice - plan.amountAllocated);
+              const balance = Math.max(0, scheduleTotal - plan.amountAllocated);
               const payable = plan.status === "active" || plan.status === "delivered" || plan.status === "processing";
               const health = plan.health;
               const inArrears = health ? isArrears(health.status) : false;
@@ -289,7 +292,7 @@ export function MyPlanBoard() {
                           )}
                         </div>
                         <div className="flex justify-between text-micro text-muted-foreground mt-1">
-                          <span>{naira(plan.amountAllocated)} of {naira(plan.productPrice)}</span>
+                          <span>{naira(plan.amountAllocated)} of {naira(scheduleTotal)}</span>
                           <span>{progress.toFixed(0)}%</span>
                         </div>
                       </div>

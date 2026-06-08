@@ -9,6 +9,7 @@
 import { ShoppingCart, User, Users, type LucideIcon } from "lucide-react";
 
 import type { PaymentOption, SoloFrequency } from "./pay-small-small";
+import type { DeliveryMethod } from "./delivery";
 
 export type OrderStatus =
   | "pending_payment"
@@ -70,6 +71,8 @@ export interface OrderItem {
 export interface OrderPlan {
   /** Plan target — the product price the schedule pays toward. */
   productPrice: number;
+  /** Door-delivery fee folded into the schedule (0 for pickup). */
+  deliveryFee: number;
   /** Amount expected each period (solo: chosen; group: slot daily). */
   perPayment: number;
   /** Cadence — solo: the customer's choice; group: always daily. */
@@ -95,6 +98,8 @@ export interface Order {
   status: OrderStatus;
   /** Outright purchase, or fulfilled via a Solo / Group Pay Small Small plan. */
   paymentPlan: PaymentOption;
+  /** Door delivery or store pickup (pickup is free). */
+  deliveryMethod: DeliveryMethod;
   customer: { name: string; email: string; phone: string };
   items: OrderItem[];
   subtotal: number;
@@ -125,6 +130,7 @@ export const MOCK_ORDERS: Order[] = [
     date: "2026-05-29",
     status: "payment_submitted",
     paymentPlan: "outright",
+    deliveryMethod: "delivery",
     customer: { name: "Adaeze Okonkwo", email: "adaeze@email.com", phone: "08011234567" },
     items: [
       { id: "i1", name: "Samsung Galaxy S24 Ultra 256GB", brand: "Samsung", condition: "new", price: 63490, qty: 1, image: IMG.phone },
@@ -140,6 +146,7 @@ export const MOCK_ORDERS: Order[] = [
     date: "2026-05-28",
     status: "processing",
     paymentPlan: "outright",
+    deliveryMethod: "delivery",
     customer: { name: "Emeka Nwosu", email: "emeka@email.com", phone: "08022345678" },
     items: [
       { id: "i1", name: "Sony PlayStation 5 Slim", brand: "Sony", condition: "new", price: 20490, qty: 1, image: IMG.console },
@@ -155,6 +162,7 @@ export const MOCK_ORDERS: Order[] = [
     date: "2026-05-28",
     status: "shipped",
     paymentPlan: "outright",
+    deliveryMethod: "delivery",
     customer: { name: "Bola Adesanya", email: "bola@email.com", phone: "08033456789" },
     items: [
       { id: "i1", name: "Hisense 43\" Smart TV", brand: "Hisense", condition: "new", price: 16400, qty: 1, image: IMG.tv },
@@ -171,6 +179,7 @@ export const MOCK_ORDERS: Order[] = [
     // Solo: past 50% so delivered, now finishing the balance — and one week behind.
     status: "delivered",
     paymentPlan: "solo",
+    deliveryMethod: "delivery",
     customer: { name: "Chukwuemeka Anyanwu", email: "anyanwue4@gmail.com", phone: "08044567890" },
     items: [
       { id: "i1", name: "HP Pavilion 15 Laptop", brand: "HP", condition: "new", price: 77490, qty: 1, image: IMG.laptop },
@@ -180,7 +189,7 @@ export const MOCK_ORDERS: Order[] = [
     total: 79990,
     shipping: { address: "3 Awolowo Avenue, Bodija", city: "Ibadan", state: "Oyo State" },
     // ₦7,000/week chosen by the customer; 7 of 12 weeks confirmed (~63%).
-    plan: { productPrice: 77490, perPayment: 7000, frequency: "weekly", startDate: "2026-04-05", paidIndices: [1, 2, 3, 4, 5, 6, 7] },
+    plan: { productPrice: 77490, deliveryFee: 0, perPayment: 7000, frequency: "weekly", startDate: "2026-04-05", paidIndices: [1, 2, 3, 4, 5, 6, 7] },
   },
   {
     id: "5",
@@ -189,6 +198,7 @@ export const MOCK_ORDERS: Order[] = [
     // Group: still collecting (below 100%), behind on a few daily payments.
     status: "in_plan",
     paymentPlan: "group",
+    deliveryMethod: "delivery",
     customer: { name: "Ngozi Eze", email: "ngozi@email.com", phone: "08055678901" },
     items: [
       { id: "i1", name: "Haier Thermocool Chest Freezer 200L", brand: "Haier Thermocool", condition: "new", price: 60000, qty: 1, image: IMG.freezer },
@@ -198,7 +208,7 @@ export const MOCK_ORDERS: Order[] = [
     total: 62500,
     shipping: { address: "18 Nnamdi Azikiwe Street", city: "Enugu", state: "Enugu State" },
     // Strict slot daily of ₦2,000 (2 slots); 12 of 30 days confirmed (40%).
-    plan: { productPrice: 60000, perPayment: 2000, frequency: "daily", startDate: "2026-05-20", paidIndices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+    plan: { productPrice: 60000, deliveryFee: 0, perPayment: 2000, frequency: "daily", startDate: "2026-05-20", paidIndices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
   },
 ];
 
@@ -226,6 +236,7 @@ interface ApiOrderItem {
 
 interface ApiOrderPlan {
   productPrice: number;
+  deliveryFee: number;
   perPayment: number;
   frequency: SoloFrequency;
   startDate: string;
@@ -238,6 +249,7 @@ export interface ApiOrder {
   createdAt: string;
   status: OrderStatus;
   paymentPlan: PaymentOption;
+  deliveryMethod: DeliveryMethod;
   customer: { name: string; email: string; phone: string };
   items: ApiOrderItem[];
   subtotal: number;
@@ -257,6 +269,7 @@ export function mapApiOrder(o: ApiOrder): Order {
     date: o.createdAt,
     status: o.status,
     paymentPlan: o.paymentPlan,
+    deliveryMethod: o.deliveryMethod,
     customer: o.customer,
     items: o.items.map((i) => ({
       id: i.id,
@@ -279,6 +292,7 @@ export function mapApiOrder(o: ApiOrder): Order {
     plan: o.plan
       ? {
           productPrice: o.plan.productPrice,
+          deliveryFee: o.plan.deliveryFee,
           perPayment: o.plan.perPayment,
           frequency: o.plan.frequency,
           startDate: o.plan.startDate,

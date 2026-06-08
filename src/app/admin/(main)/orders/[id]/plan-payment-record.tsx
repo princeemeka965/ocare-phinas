@@ -70,8 +70,11 @@ export function PlanPaymentRecord({
   const [saving, setSaving] = useState(false);
   const scheduleRef = useRef<HTMLDivElement>(null);
 
+  // The schedule collects the product price plus any door-delivery fee; the
+  // Processing/delivery threshold below still keys off the product price.
+  const scheduleTotal = plan.productPrice + plan.deliveryFee;
   const periods = planPeriods({
-    price: plan.productPrice,
+    price: scheduleTotal,
     perPayment: plan.perPayment,
     frequency: plan.frequency,
     startDate: plan.startDate,
@@ -79,15 +82,17 @@ export function PlanPaymentRecord({
   });
 
   const amountPaid = paidFromPeriods(periods);
-  const balance = Math.max(0, plan.productPrice - amountPaid);
-  const progress = Math.min(100, (amountPaid / plan.productPrice) * 100);
+  const balance = Math.max(0, scheduleTotal - amountPaid);
+  const progress = Math.min(100, (amountPaid / scheduleTotal) * 100);
 
   const thresholdPct = planProcessingThreshold(order.paymentPlan);
   const thresholdAmount = Math.round(plan.productPrice * thresholdPct);
   const thresholdReached = amountPaid >= thresholdAmount;
+  /* Where the Processing trigger sits on the (product + delivery) schedule bar. */
+  const markerPct = Math.min(100, (thresholdAmount / scheduleTotal) * 100);
 
   const health = paymentHealth({
-    price: plan.productPrice,
+    price: scheduleTotal,
     amountPaid,
     perPayment: plan.perPayment,
     frequency: plan.frequency,
@@ -111,7 +116,7 @@ export function PlanPaymentRecord({
       setPaidIndices(next);
 
       const nextPaid = paidFromPeriods(
-        planPeriods({ price: plan.productPrice, perPayment: plan.perPayment, frequency: plan.frequency, startDate: plan.startDate, paidIndices: next }),
+        planPeriods({ price: scheduleTotal, perPayment: plan.perPayment, frequency: plan.frequency, startDate: plan.startDate, paidIndices: next }),
       );
       if (nextPaid >= thresholdAmount && amountPaid < thresholdAmount) {
         toast.success(
@@ -177,7 +182,7 @@ export function PlanPaymentRecord({
         {[
           { label: "Per payment", value: `${naira(plan.perPayment)}${freqMeta.per}` },
           { label: "Paid", value: `${naira(amountPaid)}`, sub: `${paidCount}/${periods.length} ${freqMeta.unit}s` },
-          { label: "Balance", value: naira(balance) },
+          { label: "Balance", value: naira(balance), sub: plan.deliveryFee > 0 ? `incl. ${naira(plan.deliveryFee)} delivery` : undefined },
           { label: isSolo ? "Delivers at 50%" : "Completes at 100%", value: naira(thresholdAmount) },
         ].map((cell) => (
           <div key={cell.label} className="rounded-xl border border-border bg-muted/40 p-3">
@@ -198,12 +203,12 @@ export function PlanPaymentRecord({
           <div
             aria-hidden
             className="absolute top-0 bottom-0 w-0.5 bg-foreground/40"
-            style={{ left: `${thresholdPct * 100}%` }}
-            title={`Processing at ${thresholdPct * 100}%`}
+            style={{ left: `${markerPct}%` }}
+            title={`Processing at ${thresholdPct * 100}% of product price`}
           />
         </div>
         <div className="flex justify-between text-micro text-muted-foreground mt-1">
-          <span>{naira(amountPaid)} of {naira(plan.productPrice)}</span>
+          <span>{naira(amountPaid)} of {naira(scheduleTotal)}</span>
           <span>{progress.toFixed(0)}%</span>
         </div>
       </div>

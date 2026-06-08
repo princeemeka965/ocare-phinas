@@ -105,7 +105,12 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
-          <h2 className="text-body font-semibold mb-3">Delivery address</h2>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-body font-semibold">{order.deliveryMethod === "pickup" ? "Pickup" : "Delivery address"}</h2>
+            <Badge variant={order.deliveryMethod === "pickup" ? "secondary" : "default"} className="text-micro">
+              {order.deliveryMethod === "pickup" ? "Store pickup" : "Door delivery"}
+            </Badge>
+          </div>
           <div className="flex items-start gap-2 text-body-sm text-muted-foreground">
             <MapPin className="size-3.5 mt-0.5 flex-shrink-0" />
             <div>

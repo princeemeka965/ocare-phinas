@@ -28,13 +28,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (order.plan) {
     const p = order.plan;
     const paidIndices = p.payments.map((pp) => pp.periodIndex);
+    // Schedule collects the product price plus any door-delivery fee.
+    const scheduleTotal = p.productPrice + p.deliveryFee;
     periods = planPeriods({
-      price: p.productPrice, perPayment: p.perPayment, frequency: p.frequency,
+      price: scheduleTotal, perPayment: p.perPayment, frequency: p.frequency,
       startDate: p.startDate.toISOString(), paidIndices,
     });
     const amountPaid = p.payments.reduce((s, pp) => s + pp.amount, 0);
     health = paymentHealth({
-      price: p.productPrice, amountPaid, perPayment: p.perPayment, frequency: p.frequency,
+      price: scheduleTotal, amountPaid, perPayment: p.perPayment, frequency: p.frequency,
       startDate: p.startDate.toISOString(),
     });
   }

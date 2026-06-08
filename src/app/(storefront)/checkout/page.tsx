@@ -56,17 +56,6 @@ const NG_STATES = [
   "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
 ];
 
-const FREE_DELIVERY_THRESHOLD = 200_000;
-
-/** Mocked delivery fee by state — replace with Settings-driven rates in Phase 3. */
-function deliveryFeeFor(state: string, subtotal: number) {
-  if (!state) return null;
-  if (subtotal >= FREE_DELIVERY_THRESHOLD) return 0;
-  if (state === "Lagos") return 2_500;
-  if (state === "FCT - Abuja") return 3_500;
-  return 5_000;
-}
-
 type PayPlan = "outright" | "solo" | "group";
 
 export default function CheckoutPage() {
@@ -82,10 +71,17 @@ export default function CheckoutPage() {
   const [soloAmount, setSoloAmount] = useState("");
   const [method, setMethod] = useState<"delivery" | "pickup">("delivery");
   const [state, setState] = useState("");
+  const [settingsFee, setSettingsFee] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    api
+      .get<{ settings: { deliveryFee: number } }>("/api/settings")
+      .then((d) => setSettingsFee(d.settings.deliveryFee))
+      .catch(() => {});
+  }, []);
 
   if (!mounted) return null;
 
@@ -125,8 +121,8 @@ export default function CheckoutPage() {
   }
 
   const isDelivery = method === "delivery";
-  const deliveryFee = isDelivery ? deliveryFeeFor(state, subtotal) : 0;
-  const total = subtotal + (deliveryFee ?? 0);
+  const deliveryFee = isDelivery ? settingsFee : 0;
+  const total = subtotal + deliveryFee;
 
   /* ----------------------- Plan derivations ----------------------- */
   /* Solo — the customer chooses how much AND how often (daily/weekly/monthly). */
@@ -229,6 +225,7 @@ export default function CheckoutPage() {
       if (plan === "outright") {
         const { order } = await api.post<{ order: { id: string } }>("/api/orders", {
           items: items.map((i) => ({ id: i.id, qty: i.quantity })),
+          deliveryMethod: method,
           shipping,
         });
         clearCart();
@@ -250,6 +247,7 @@ export default function CheckoutPage() {
           productId: line.id,
           perPayment: soloAmountNum,
           frequency: soloFreq,
+          deliveryMethod: method,
           shipping,
         });
         clearCart();
@@ -258,13 +256,21 @@ export default function CheckoutPage() {
         return;
       }
 
-      /* Group — pick an open group on the join page, carrying the chosen item. */
+      /* Group — pick an open group on the join page, carrying the chosen item
+         and the delivery selection so the customer doesn't re-enter it. */
       const qs = new URLSearchParams({
         productId: line.id,
         name: line.name,
         price: String(line.price),
         image: line.image ?? "",
+        method,
       });
+      if (isDelivery) {
+        qs.set("state", shipping.state ?? "");
+        qs.set("city", shipping.city ?? "");
+        qs.set("address", shipping.address ?? "");
+        if (shipping.landmark) qs.set("landmark", shipping.landmark);
+      }
       router.push(`/pay-small-small/join?${qs.toString()}`);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
@@ -676,20 +682,9 @@ export default function CheckoutPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Delivery fee</span>
                     <span className={cn("font-medium", deliveryFee === 0 && "text-primary")}>
-                      {!isDelivery
-                        ? "Free (pickup)"
-                        : deliveryFee == null
-                          ? "Select state"
-                          : deliveryFee === 0
-                            ? "Free"
-                            : `₦${deliveryFee.toLocaleString("en-NG")}`}
+                      {!isDelivery ? "Free (pickup)" : deliveryFee === 0 ? "Free" : `₦${deliveryFee.toLocaleString("en-NG")}`}
                     </span>
                   </div>
-                  {isDelivery && subtotal < FREE_DELIVERY_THRESHOLD && (
-                    <p className="text-caption text-muted-foreground">
-                      Free delivery on orders over ₦{FREE_DELIVERY_THRESHOLD.toLocaleString("en-NG")}.
-                    </p>
-                  )}
                   <hr className="border-border" />
                   <div className="flex justify-between text-body font-bold">
                     <span>Total</span>
@@ -703,13 +698,23 @@ export default function CheckoutPage() {
                     <span className="font-medium">₦{subtotal.toLocaleString("en-NG")}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">Delivery fee</span>
+                    <span className={cn("font-medium", deliveryFee === 0 && "text-primary")}>
+                      {isDelivery ? (deliveryFee === 0 ? "Free" : `₦${deliveryFee.toLocaleString("en-NG")}`) : "Free (pickup)"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Plan type</span>
                     <span className="font-medium capitalize">{plan}</span>
                   </div>
                   <hr className="border-border" />
                   <div className="flex justify-between text-body font-bold">
-                    <span>Pay today</span>
-                    <span className="text-primary">
+                    <span>Total to pay</span>
+                    <span className="text-primary">₦{total.toLocaleString("en-NG")}</span>
+                  </div>
+                  <div className="flex justify-between text-body-sm">
+                    <span className="text-muted-foreground">Pay today</span>
+                    <span className="font-semibold">
                       {plan === "solo"
                         ? soloValid
                           ? `${naira(soloMath!.amount)}${soloMeta.per}`
@@ -718,8 +723,9 @@ export default function CheckoutPage() {
                     </span>
                   </div>
                   <p className="text-caption text-muted-foreground">
-                    No payment is taken now — your first payment starts your plan. Money paid in
-                    can only ever become a product; there are no withdrawals.
+                    No payment is taken now — your first payment starts your plan. The delivery fee
+                    is spread across your plan. Money paid in can only ever become a product; there
+                    are no withdrawals.
                   </p>
                 </div>
               )}

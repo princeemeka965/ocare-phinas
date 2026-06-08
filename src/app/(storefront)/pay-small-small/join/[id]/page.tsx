@@ -25,6 +25,13 @@ import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import {
+  DeliveryFields,
+  emptyDeliveryForm,
+  deliveryFormValid,
+  deliveryShipping,
+  type DeliveryForm,
+} from "@/components/storefront/delivery-fields";
+import {
   SLOT_DAILY,
   CYCLE_DAYS,
   SLOT_CYCLE_VALUE,
@@ -61,8 +68,27 @@ function JoinGroupConfirmInner() {
   const [step, setStep] = useState<"confirm" | "done">("confirm");
   const [joining, setJoining] = useState(false);
 
+  /* Door delivery vs. store pickup — the fee (delivery only) folds into the plan
+     total. Prefilled from the checkout selection when the customer came via checkout. */
+  const [delivery, setDelivery] = useState<DeliveryForm>(() => {
+    const m = search.get("method");
+    if (m === "pickup") return { ...emptyDeliveryForm(), method: "pickup" };
+    if (m === "delivery")
+      return {
+        method: "delivery",
+        state: search.get("state") ?? "",
+        city: search.get("city") ?? "",
+        address: search.get("address") ?? "",
+        landmark: search.get("landmark") ?? "",
+      };
+    return emptyDeliveryForm();
+  });
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryError, setDeliveryError] = useState(false);
+
   useEffect(() => {
     api.get<{ groups: Group[] }>("/api/groups").then((d) => setGroups(d.groups)).catch(() => setGroups([]));
+    api.get<{ settings: { deliveryFee: number } }>("/api/settings").then((d) => setDeliveryFee(d.settings.deliveryFee)).catch(() => {});
   }, []);
 
   /* Target item carried from a product page (productId required to join). */
@@ -75,6 +101,7 @@ function JoinGroupConfirmInner() {
   const group = groups?.find((g) => g.id === id) ?? null;
   const itemSlots = hasItem ? groupSlotsForPrice(itemPrice) : 1;
   const daily = dailyForSlots(itemSlots);
+  const fee = delivery.method === "delivery" ? deliveryFee : 0;
 
   /* ---------------------------- AUTH GATE --------------------------- */
   if (!user) {
@@ -209,9 +236,20 @@ function JoinGroupConfirmInner() {
 
   async function join() {
     if (!group || !productId) return;
+    if (!deliveryFormValid(delivery)) {
+      setDeliveryError(true);
+      toast.error("Add your delivery address, or choose store pickup.");
+      return;
+    }
+    setDeliveryError(false);
     setJoining(true);
     try {
-      await api.post(`/api/groups/${group.id}/join`, { productId, slots: itemSlots });
+      await api.post(`/api/groups/${group.id}/join`, {
+        productId,
+        slots: itemSlots,
+        deliveryMethod: delivery.method,
+        shipping: deliveryShipping(delivery),
+      });
       setStep("done");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Couldn't join the group. Please try again.");
@@ -289,6 +327,23 @@ function JoinGroupConfirmInner() {
           </div>
         </div>
 
+        {/* How would you like to receive it? */}
+        <div className="rounded-2xl border border-border bg-card p-5 mb-5">
+          <h2 className="text-body font-semibold mb-1">How would you like to receive it?</h2>
+          <p className="text-caption text-muted-foreground mb-4">
+            Choose door delivery or free store pickup — a delivery fee folds into your plan total.
+          </p>
+          <DeliveryFields
+            value={delivery}
+            onChange={setDelivery}
+            errors={
+              deliveryError
+                ? { state: "Required", city: "Required", address: "Enter your delivery address." }
+                : undefined
+            }
+          />
+        </div>
+
         {/* Your commitment */}
         <div className="rounded-2xl border border-border bg-muted/50 p-5 mb-5">
           <h2 className="text-body font-semibold mb-3">Your commitment</h2>
@@ -296,8 +351,10 @@ function JoinGroupConfirmInner() {
             {[
               ["Slots", `${itemSlots}`],
               ["Daily payment", `${naira(daily)}/day`],
+              ["Item price", naira(itemPrice)],
+              ["Delivery", fee > 0 ? naira(fee) : "Free (pickup)"],
+              ["Total to pay", naira(itemPrice + fee)],
               ["Cycle", `${CYCLE_DAYS} days`],
-              ["Value per slot/cycle", naira(SLOT_CYCLE_VALUE)],
               ["Plan type", `Group ${group.reference}`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">

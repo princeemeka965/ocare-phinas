@@ -5,12 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
 import { getSettings } from "@/lib/settings";
 import { slotsForPrice, SOLO_MIN_DAILY } from "@/lib/pay-small-small";
+import { resolveDelivery } from "@/lib/delivery";
 import { hasActivePlanOfType, nextOrderReference } from "@/lib/server/lifecycle";
 
 const schema = z.object({
   productId: z.string(),
   perPayment: z.number().int().min(SOLO_MIN_DAILY),
   frequency: z.enum(["daily", "weekly", "monthly"]),
+  deliveryMethod: z.enum(["delivery", "pickup"]).default("delivery"),
   shipping: z
     .object({ address: z.string(), city: z.string(), state: z.string(), landmark: z.string().optional() })
     .optional(),
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Invalid plan details.");
-  const { productId, perPayment, frequency, shipping } = parsed.data;
+  const { productId, perPayment, frequency, deliveryMethod, shipping } = parsed.data;
 
   const product = await prisma.product.findFirst({ where: { id: productId, active: true } });
   if (!product) return jsonError(404, "Product not found.");
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   const settings = await getSettings();
+  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, settings.deliveryFee, shipping);
   const order = await prisma.$transaction(async (tx) => {
     const plan = await tx.plan.create({
       data: {
@@ -41,6 +44,7 @@ export async function POST(req: NextRequest) {
         type: "solo",
         productId: product.id,
         productPrice: product.price,
+        deliveryFee,
         slots: slotsForPrice(product.price),
         perPayment,
         frequency,
@@ -54,13 +58,14 @@ export async function POST(req: NextRequest) {
         customerId: gate.customer.id,
         status: "in_plan",
         paymentPlan: "solo",
+        deliveryMethod,
         subtotal: product.price,
-        deliveryFee: settings.deliveryFee,
-        total: product.price + settings.deliveryFee,
-        shipAddress: shipping?.address ?? "",
-        shipCity: shipping?.city ?? "",
-        shipState: shipping?.state ?? "",
-        shipLandmark: shipping?.landmark,
+        deliveryFee,
+        total: product.price + deliveryFee,
+        shipAddress: ship.address,
+        shipCity: ship.city,
+        shipState: ship.state,
+        shipLandmark: ship.landmark,
         planId: plan.id,
         items: {
           create: {

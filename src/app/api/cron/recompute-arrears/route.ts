@@ -12,7 +12,12 @@ import { plansInArrears } from "@/lib/server/arrears";
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("x-cron-secret") !== secret) {
+  // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`; external schedulers
+  // can send the custom `x-cron-secret` header. Accept either.
+  const provided =
+    req.headers.get("x-cron-secret") ??
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!secret || provided !== secret) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 

@@ -14,6 +14,13 @@ import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import {
+  DeliveryFields,
+  emptyDeliveryForm,
+  deliveryFormValid,
+  deliveryShipping,
+  type DeliveryForm,
+} from "@/components/storefront/delivery-fields";
+import {
   soloPlanMath,
   naira,
   suggestedSoloAmount,
@@ -58,12 +65,23 @@ function SoloPlanInner() {
   const [items, setItems] = useState<SoloItem[]>([]);
   const [starting, setStarting] = useState(false);
 
+  /* Door delivery vs. store pickup — the fee (delivery only) folds into the plan total. */
+  const [delivery, setDelivery] = useState<DeliveryForm>(emptyDeliveryForm);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryError, setDeliveryError] = useState(false);
+
   useEffect(() => {
     api
       .get<{ products: { id: string; name: string; price: number; images: string[] }[] }>("/api/products?limit=40&sort=price_desc")
       .then((d) => setItems(d.products.map((p) => ({ id: p.id, name: p.name, price: p.price, image: p.images[0] ?? PLACEHOLDER_IMG }))))
       .catch(() => setItems([]));
+    api
+      .get<{ settings: { deliveryFee: number } }>("/api/settings")
+      .then((d) => setDeliveryFee(d.settings.deliveryFee))
+      .catch(() => {});
   }, []);
+
+  const fee = delivery.method === "delivery" ? deliveryFee : 0;
 
   /* Effective list: the deep-linked item first, then the catalog. */
   const itemList = prefill ? [prefill, ...items.filter((i) => i.id !== prefill.id)] : items;
@@ -103,9 +121,21 @@ function SoloPlanInner() {
   /* Create the solo plan server-side, then show the success step. */
   async function startPlan() {
     if (!selected || !amountValid) return;
+    if (!deliveryFormValid(delivery)) {
+      setDeliveryError(true);
+      toast.error("Add your delivery address, or choose store pickup.");
+      return;
+    }
+    setDeliveryError(false);
     setStarting(true);
     try {
-      await api.post("/api/plans", { productId: selected.id, perPayment: amount, frequency });
+      await api.post("/api/plans", {
+        productId: selected.id,
+        perPayment: amount,
+        frequency,
+        deliveryMethod: delivery.method,
+        shipping: deliveryShipping(delivery),
+      });
       setStep("done");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Couldn't start your plan. Please try again.");
@@ -261,6 +291,23 @@ function SoloPlanInner() {
             </div>
           </div>
 
+          {/* How would you like to receive it? */}
+          <div className="rounded-2xl border border-border bg-card p-5 mb-6">
+            <h2 className="text-body font-semibold mb-1">How would you like to receive it?</h2>
+            <p className="text-caption text-muted-foreground mb-4">
+              Choose door delivery or free store pickup — a delivery fee folds into your plan total.
+            </p>
+            <DeliveryFields
+              value={delivery}
+              onChange={setDelivery}
+              errors={
+                deliveryError
+                  ? { state: "Required", city: "Required", address: "Enter your delivery address." }
+                  : undefined
+              }
+            />
+          </div>
+
           {/* Plan summary */}
           {math && amountValid ? (
             <div className="rounded-2xl border border-border bg-muted/50 p-5 mb-6 space-y-3">
@@ -272,9 +319,11 @@ function SoloPlanInner() {
                 {[
                   ["Payment", `${naira(math.amount)}${freqMeta.per}`],
                   ["Item price", naira(selected.price)],
+                  ["Delivery", fee > 0 ? naira(fee) : "Free (pickup)"],
+                  ["Total to pay", naira(selected.price + fee)],
                   [
                     "Payments to fully pay",
-                    `${math.paymentsToComplete} ${freqMeta.unit}${math.paymentsToComplete !== 1 ? "s" : ""} (${math.daysToComplete} days)`,
+                    `${Math.ceil((selected.price + fee) / amount)} ${freqMeta.unit}${Math.ceil((selected.price + fee) / amount) !== 1 ? "s" : ""} (${Math.ceil((selected.price + fee) / amount) * freqMeta.days} days)`,
                   ],
                   ["Plan type", `Solo · ${freqMeta.label.toLowerCase()}`],
                 ].map(([k, v]) => (
@@ -287,9 +336,9 @@ function SoloPlanInner() {
               <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 p-3 text-caption">
                 <Truck className="size-4 text-primary flex-shrink-0 mt-0.5" />
                 <span className="text-muted-foreground">
-                  We deliver your item once you&apos;ve paid <span className="font-semibold text-foreground">{naira(math.deliveryTarget)}</span> (50%)
+                  We deliver your item once you&apos;ve paid <span className="font-semibold text-foreground">{naira(math.deliveryTarget)}</span> (50% of the item)
                   — about <span className="font-semibold text-foreground">{math.paymentsToDelivery} {freqMeta.unit}{math.paymentsToDelivery !== 1 ? "s" : ""}</span> in.
-                  You then finish the balance.
+                  You then finish the balance{fee > 0 ? " (including delivery)" : ""}.
                 </span>
               </div>
             </div>

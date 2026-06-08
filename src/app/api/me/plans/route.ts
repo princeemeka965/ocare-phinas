@@ -30,6 +30,7 @@ export async function GET() {
       productName: p.product?.name ?? null,
       productImage: p.product?.images[0] ?? null,
       productPrice: p.productPrice,
+      deliveryFee: p.deliveryFee,
       perPayment: p.perPayment,
       frequency: p.frequency,
       slots: p.slots,

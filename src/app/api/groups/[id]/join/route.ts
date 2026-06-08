@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
 import { getSettings } from "@/lib/settings";
 import { isGroupEligible, GROUP_MAX_SLOTS_PER_CUSTOMER } from "@/lib/pay-small-small";
+import { resolveDelivery } from "@/lib/delivery";
 import { hasActivePlanOfType, nextOrderReference } from "@/lib/server/lifecycle";
 
 type Params = { params: Promise<{ id: string }> };
@@ -12,6 +13,10 @@ type Params = { params: Promise<{ id: string }> };
 const schema = z.object({
   productId: z.string(),
   slots: z.number().int().min(1).max(GROUP_MAX_SLOTS_PER_CUSTOMER),
+  deliveryMethod: z.enum(["delivery", "pickup"]).default("delivery"),
+  shipping: z
+    .object({ address: z.string(), city: z.string(), state: z.string(), landmark: z.string().optional() })
+    .optional(),
 });
 
 // POST /api/groups/:id/join — join a group toward a chosen item (≤ ₦100k), §5.3.
@@ -22,7 +27,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Choose a product and 1–2 slots.");
-  const { productId, slots } = parsed.data;
+  const { productId, slots, deliveryMethod, shipping } = parsed.data;
 
   const [group, product, settings] = await Promise.all([
     prisma.group.findUnique({ where: { id } }),
@@ -38,6 +43,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const perPayment = slots * settings.slotDaily;
+  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, settings.deliveryFee, shipping);
 
   const order = await prisma.$transaction(async (tx) => {
     const plan = await tx.plan.create({
@@ -47,6 +53,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         groupId: group.id,
         productId: product.id,
         productPrice: product.price,
+        deliveryFee,
         slots,
         perPayment,
         frequency: "daily",
@@ -68,12 +75,14 @@ export async function POST(req: NextRequest, { params }: Params) {
         customerId: gate.customer.id,
         status: "in_plan",
         paymentPlan: "group",
+        deliveryMethod,
         subtotal: product.price,
-        deliveryFee: settings.deliveryFee,
-        total: product.price + settings.deliveryFee,
-        shipAddress: "",
-        shipCity: "",
-        shipState: "",
+        deliveryFee,
+        total: product.price + deliveryFee,
+        shipAddress: ship.address,
+        shipCity: ship.city,
+        shipState: ship.state,
+        shipLandmark: ship.landmark,
         planId: plan.id,
         items: {
           create: {

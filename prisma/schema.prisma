@@ -59,6 +59,11 @@ enum GroupStatus {
   completed
 }
 
+enum DeliveryMethod {
+  delivery
+  pickup
+}
+
 enum TxnType {
   deposit
   allocation
@@ -218,6 +223,9 @@ model Plan {
   productId         String?
   product           Product?       @relation(fields: [productId], references: [id])
   productPrice      Int
+  // Delivery fee folded into the plan: the schedule collects productPrice +
+  // deliveryFee. 0 for pickup. Fulfilment thresholds still key off productPrice.
+  deliveryFee       Int            @default(0)
   slots             Int            @default(1)
   perPayment        Int
   frequency         PlanFrequency  @default(daily)
@@ -243,11 +251,12 @@ model Order {
   reference   String      @unique
   customerId  String
   customer    Customer    @relation(fields: [customerId], references: [id])
-  status      OrderStatus @default(pending_payment)
-  paymentPlan PlanType    @default(outright)
-  subtotal    Int
-  deliveryFee Int         @default(0)
-  total       Int
+  status         OrderStatus    @default(pending_payment)
+  paymentPlan    PlanType       @default(outright)
+  deliveryMethod DeliveryMethod @default(delivery)
+  subtotal       Int
+  deliveryFee    Int            @default(0)
+  total          Int
 
   shipAddress  String
   shipCity     String

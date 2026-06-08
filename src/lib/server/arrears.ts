@@ -15,7 +15,8 @@ export const PAYABLE_PLAN_STATUSES = ["active", "delivered", "processing"] as co
 export function planHealthFrom(plan: Plan, payments: Pick<PlanPayment, "amount">[]): PaymentHealth {
   const amountPaid = payments.reduce((s, p) => s + p.amount, 0);
   return paymentHealth({
-    price: plan.productPrice,
+    // Schedule collects the product price plus any door-delivery fee.
+    price: plan.productPrice + plan.deliveryFee,
     amountPaid,
     perPayment: plan.perPayment,
     frequency: plan.frequency,

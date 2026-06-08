@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, ImagePlus, X, Loader2 } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,39 @@ export interface ProductFormValues {
 const inputClass = "w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors";
 const labelClass = "text-body-sm font-medium block mb-1.5";
 
+const MAX_IMAGES = 3;
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+interface CloudinarySignature {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  folder: string;
+  signature: string;
+}
+
+/** Upload a single file straight to Cloudinary using a server-issued signature. */
+async function uploadToCloudinary(file: File): Promise<string> {
+  const sig = await api.post<CloudinarySignature>("/api/admin/cloudinary-signature");
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("api_key", sig.apiKey);
+  fd.append("timestamp", String(sig.timestamp));
+  fd.append("folder", sig.folder);
+  fd.append("signature", sig.signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
+    method: "POST",
+    body: fd,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.secure_url) {
+    throw new Error(data?.error?.message ?? "Cloudinary upload failed.");
+  }
+  return data.secure_url as string;
+}
+
 export function ProductForm({ product }: { product?: ProductFormValues }) {
   const router = useRouter();
   const editing = !!product?.id;
@@ -45,7 +78,9 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
   const [price, setPrice] = useState(product ? String(product.price) : "");
   const [stock, setStock] = useState(product ? String(product.stockQuantity) : "");
   const [active, setActive] = useState(product?.active ?? true);
-  const [images, setImages] = useState((product?.images ?? []).join("\n"));
+  const [images, setImages] = useState<string[]>(product?.images ?? []);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [specs, setSpecs] = useState<Spec[]>(
     product?.specs && Object.keys(product.specs).length
       ? Object.entries(product.specs).map(([key, value]) => ({ key, value }))
@@ -73,7 +108,7 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
       condition,
       categoryId: categoryId || null,
       brandId: brandId || null,
-      images: images.split("\n").map((s) => s.trim()).filter(Boolean),
+      images,
       specs: Object.keys(specObj).length ? specObj : null,
       active,
     };
@@ -89,6 +124,47 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
       toast.error(err instanceof ApiError ? err.message : "Could not save the product.", "Failed");
       setSaving(false);
     }
+  }
+
+  async function handleFiles(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    const incoming = Array.from(fileList);
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      toast.error(`You can upload at most ${MAX_IMAGES} images.`, "Limit reached");
+      return;
+    }
+    if (incoming.length > room) {
+      toast.error(`Only ${room} more image${room === 1 ? "" : "s"} allowed — extras were skipped.`, "Limit reached");
+    }
+
+    const valid = incoming.slice(0, room).filter((f) => {
+      if (!ACCEPTED_TYPES.includes(f.type)) {
+        toast.error(`${f.name}: unsupported format.`, "Skipped");
+        return false;
+      }
+      if (f.size > MAX_BYTES) {
+        toast.error(`${f.name}: larger than 5 MB.`, "Skipped");
+        return false;
+      }
+      return true;
+    });
+    if (!valid.length) return;
+
+    setUploading(true);
+    try {
+      const urls = await Promise.all(valid.map(uploadToCloudinary));
+      setImages((prev) => [...prev, ...urls].slice(0, MAX_IMAGES));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.", "Failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeImage(url: string) {
+    setImages((prev) => prev.filter((u) => u !== url));
   }
 
   async function handleDelete() {
@@ -159,10 +235,52 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-6 space-y-3">
-        <h2 className="text-body font-semibold">Images</h2>
-        <label className={labelClass}>Image URLs — one per line (first is primary)</label>
-        <textarea value={images} onChange={(e) => setImages(e.target.value)} rows={3} placeholder="https://…/photo.jpg" className="w-full px-3 py-2 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40 resize-none font-mono" />
-        <p className="text-caption text-muted-foreground">Direct file upload comes later — paste hosted image URLs for now.</p>
+        <div className="flex items-center justify-between">
+          <h2 className="text-body font-semibold">Images</h2>
+          <span className="text-caption text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
+        </div>
+        <p className="text-caption text-muted-foreground -mt-1">Upload up to {MAX_IMAGES} images (JPG, PNG, WebP or AVIF, max 5&nbsp;MB each). The first image is the primary one.</p>
+
+        <div className="flex flex-wrap gap-3">
+          {images.map((url, i) => (
+            <div key={url} className="relative size-24 rounded-lg border border-border overflow-hidden bg-muted group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={`Product image ${i + 1}`} className="size-full object-cover" />
+              {i === 0 && (
+                <span className="absolute bottom-0 inset-x-0 bg-primary/90 text-white text-[10px] font-medium text-center py-0.5">Primary</span>
+              )}
+              <button
+                type="button"
+                onClick={() => removeImage(url)}
+                className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-background/90 text-foreground shadow hover:bg-destructive hover:text-white transition-colors"
+                aria-label="Remove image"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+
+          {images.length < MAX_IMAGES && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex size-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-60"
+            >
+              {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
+              <span className="text-caption">{uploading ? "Uploading…" : "Upload"}</span>
+            </button>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_TYPES.join(",")}
+          multiple
+          hidden
+          onChange={(e) => handleFiles(e.target.files)}
+        />
       </div>
 
       <div className="flex items-center gap-3">

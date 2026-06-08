@@ -52,9 +52,12 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
   if (!order || !order.plan) return { ok: false, status: 404, error: "Plan order not found." };
   const plan = order.plan;
 
+  // The schedule collects the product price plus any door-delivery fee; the
+  // fulfilment triggers below still key off the product price (the goods value).
+  const scheduleTotal = plan.productPrice + plan.deliveryFee;
   const payments = await prisma.planPayment.findMany({ where: { planId: plan.id } });
   const periods = planPeriods({
-    price: plan.productPrice,
+    price: scheduleTotal,
     perPayment: plan.perPayment,
     frequency: plan.frequency,
     startDate: plan.startDate.toISOString(),
@@ -88,8 +91,10 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
     let orderStatus: string = order.status;
     let awaitingSubstitution = false;
 
-    const threshold = plan.type === "solo" ? 0.5 : 1;
-    const reached = amountAllocated >= Math.round(plan.productPrice * threshold);
+    // Goods are delivered at the fulfilment trigger — solo 50%, group 100% — of
+    // the product price (the delivery fee is finished off afterwards as balance).
+    const goodsTrigger = Math.round(plan.productPrice * (plan.type === "solo" ? 0.5 : 1));
+    const reached = amountAllocated >= goodsTrigger;
 
     if (order.status === "in_plan" && reached) {
       const product = plan.productId ? await tx.product.findUnique({ where: { id: plan.productId } }) : null;
@@ -109,13 +114,15 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
     }
 
     if (!awaitingSubstitution) {
-      if (amountAllocated >= plan.productPrice) {
+      if (amountAllocated >= scheduleTotal) {
+        // Fully paid (product + delivery) — plan completes.
         planStatus = "completed";
         if (plan.type === "group" && plan.groupId) {
           await tx.groupMembership.deleteMany({ where: { groupId: plan.groupId, customerId: plan.customerId } });
           await tx.group.update({ where: { id: plan.groupId }, data: { slotsFilled: { decrement: plan.slots } } });
         }
-      } else if (plan.type === "solo" && amountAllocated >= Math.round(plan.productPrice * 0.5)) {
+      } else if (amountAllocated >= goodsTrigger) {
+        // Goods delivered; the remaining delivery fee is paid off as balance.
         planStatus = "delivered";
       }
     }
