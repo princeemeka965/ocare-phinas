@@ -7,8 +7,9 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/ui/pagination";
 import { ProductCard } from "@/components/storefront/product-card";
-import { listProducts, listCategories, listBrandNames } from "@/lib/server/catalog";
+import { listProductsPaged, listCategories, listBrandNames } from "@/lib/server/catalog";
 
 export const metadata: Metadata = {
   title: "All Products — OCare Phinas",
@@ -33,16 +34,21 @@ type Filters = {
   condition?: string;
   sort?: string;
   instock?: string;
+  page?: string;
 };
 
 interface PageProps {
   searchParams: Promise<Filters>;
 }
 
-/** Build an href to /products with `changes` merged into the current filters. */
+/** Build an href to /products with `changes` merged into the current filters.
+   The current page is dropped unless `changes` sets one, so changing any filter
+   resets back to page 1 while pagination links keep their target page. */
 function buildHref(current: Filters, changes: Partial<Filters>): string {
+  const carried: Filters = { ...current };
+  delete carried.page;
   const merged: Record<string, string> = {};
-  for (const [k, v] of Object.entries({ ...current, ...changes })) {
+  for (const [k, v] of Object.entries({ ...carried, ...changes })) {
     if (v) merged[k] = v;
   }
   const qs = new URLSearchParams(merged).toString();
@@ -51,13 +57,15 @@ function buildHref(current: Filters, changes: Partial<Filters>): string {
 
 export default async function ProductsPage({ searchParams }: PageProps) {
   const filters = await searchParams;
+  const page = Math.max(1, Number(filters.page) || 1);
 
-  /* DB-backed: filtering + sorting happen in the query. */
-  const [products, categoriesRaw, brandNames] = await Promise.all([
-    listProducts(filters),
+  /* DB-backed: filtering + sorting + pagination happen in the query. */
+  const [paged, categoriesRaw, brandNames] = await Promise.all([
+    listProductsPaged(filters, page),
     listCategories(),
     listBrandNames(),
   ]);
+  const { products, total, page: currentPage, pages } = paged;
   const categories = categoriesRaw.map((c) => ({ slug: c.slug, label: c.name }));
   const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(categories.map((c) => [c.slug, c.label]));
   const brands = brandNames;
@@ -95,8 +103,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           </nav>
           <h1 className="text-h1 font-bold">All Products</h1>
           <p className="text-muted-foreground mt-1">
-            {products.length} {products.length === 1 ? "product" : "products"}
+            {total} {total === 1 ? "product" : "products"}
             {hasFilters ? " match your filters" : " in our catalog"}
+            {pages > 1 ? ` · page ${currentPage} of ${pages}` : ""}
           </p>
         </div>
 
@@ -219,11 +228,19 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
             {/* Grid */}
             {products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {products.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {products.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+                <Pagination
+                  page={currentPage}
+                  pages={pages}
+                  hrefFor={(p) => buildHref(filters, { page: p === 1 ? undefined : String(p) })}
+                  className="mt-10"
+                />
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border">
                 <div className="size-14 rounded-full bg-muted flex items-center justify-center mb-4">

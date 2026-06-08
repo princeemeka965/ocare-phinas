@@ -6,8 +6,9 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/ui/pagination";
 import { ProductCard, ProductCardSkeleton } from "@/components/storefront/product-card";
-import { listProducts, getCategoryBySlug, listBrandNames } from "@/lib/server/catalog";
+import { listProductsPaged, getCategoryBySlug, listBrandNames } from "@/lib/server/catalog";
 
 const PREOWNED_SLUG = "pre-owned";
 
@@ -20,6 +21,7 @@ interface PageProps {
     instock?: string;
     minPrice?: string;
     maxPrice?: string;
+    page?: string;
   }>;
 }
 
@@ -41,18 +43,35 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   const isPreowned = slug === PREOWNED_SLUG;
   const category = isPreowned ? null : await getCategoryBySlug(slug);
   const label = isPreowned ? "Pre-owned (Tokunbo / UK Used)" : category?.name ?? slug;
+  const page = Math.max(1, Number(filters.page) || 1);
 
   /* Pre-owned is a condition view; otherwise filter by this category slug. */
-  const [products, brands] = await Promise.all([
-    listProducts({
-      ...(isPreowned ? { condition: "used" } : { category: slug }),
-      brand: filters.brand,
-      condition: isPreowned ? "used" : filters.condition,
-      instock: filters.instock,
-      sort: filters.sort,
-    }),
+  const [paged, brands] = await Promise.all([
+    listProductsPaged(
+      {
+        ...(isPreowned ? { condition: "used" } : { category: slug }),
+        brand: filters.brand,
+        condition: isPreowned ? "used" : filters.condition,
+        instock: filters.instock,
+        sort: filters.sort,
+      },
+      page,
+    ),
     listBrandNames(),
   ]);
+  const { products, total, page: currentPage, pages } = paged;
+
+  /* Preserve active filters when moving between pages; drop `page` itself. */
+  function pageHref(target: number): string {
+    const params = new URLSearchParams();
+    if (filters.brand) params.set("brand", filters.brand);
+    if (filters.condition) params.set("condition", filters.condition);
+    if (filters.instock) params.set("instock", filters.instock);
+    if (filters.sort) params.set("sort", filters.sort);
+    if (target > 1) params.set("page", String(target));
+    const qs = params.toString();
+    return qs ? `/category/${slug}?${qs}` : `/category/${slug}`;
+  }
 
   const activeFilters = [
     filters.brand && `Brand: ${filters.brand}`,
@@ -74,7 +93,8 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
             <div>
               <h1 className="text-h1 font-bold">{label}</h1>
               <p className="text-muted-foreground mt-1">
-                {products.length} {products.length === 1 ? "product" : "products"} found
+                {total} {total === 1 ? "product" : "products"} found
+                {pages > 1 ? ` · page ${currentPage} of ${pages}` : ""}
               </p>
             </div>
           </div>
@@ -127,11 +147,14 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
 
             {/* Product grid */}
             {products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {products.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {products.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+                <Pagination page={currentPage} pages={pages} hrefFor={pageHref} className="mt-10" />
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border">
                 <p className="text-h3 font-semibold mb-2">No products found</p>

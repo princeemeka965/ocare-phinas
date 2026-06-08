@@ -22,12 +22,21 @@ export async function GET(req: NextRequest) {
   if (sp.get("active") === "true") where.active = true;
   if (sp.get("active") === "false") where.active = false;
 
-  const products = await prisma.product.findMany({
-    where,
-    include: { category: { select: { name: true, slug: true } }, brand: { select: { name: true, slug: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-  return NextResponse.json({ products });
+  const page = Math.max(1, Number(sp.get("page")) || 1);
+  const pageSize = Math.min(Math.max(1, Number(sp.get("pageSize")) || 20), 100);
+  const include = { category: { select: { name: true, slug: true } }, brand: { select: { name: true, slug: true } } };
+
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      include,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ]);
+  return NextResponse.json({ products, total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)) });
 }
 
 const createSchema = z.object({

@@ -5,9 +5,12 @@ import Link from "next/link";
 import { Search, Edit, Trash2, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toastStore";
 import { api, ApiError } from "@/lib/api";
+
+const PAGE_SIZE = 20;
 
 interface AdminProduct {
   id: string;
@@ -30,6 +33,9 @@ export function ProductsTable() {
   const [categoryId, setCategoryId] = useState("");
   const [condition, setCondition] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   async function load() {
     setLoading(true);
@@ -37,9 +43,15 @@ export function ProductsTable() {
     if (q.trim()) params.set("q", q.trim());
     if (categoryId) params.set("categoryId", categoryId);
     if (condition) params.set("condition", condition);
+    params.set("page", String(page));
+    params.set("pageSize", String(PAGE_SIZE));
     try {
-      const d = await api.get<{ products: AdminProduct[] }>(`/api/admin/products?${params.toString()}`);
+      const d = await api.get<{ products: AdminProduct[]; total: number; pages: number }>(
+        `/api/admin/products?${params.toString()}`,
+      );
       setProducts(d.products);
+      setTotal(d.total);
+      setPages(d.pages);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not load products.", "Failed");
     } finally {
@@ -47,12 +59,12 @@ export function ProductsTable() {
     }
   }
 
-  // Reload on filter changes (debounced for the search box).
+  // Reload on filter or page changes (debounced for the search box).
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, categoryId, condition]);
+  }, [q, categoryId, condition, page]);
 
   useEffect(() => {
     api.get<{ categories: Option[] }>("/api/categories").then((d) => setCategories(d.categories)).catch(() => {});
@@ -75,8 +87,11 @@ export function ProductsTable() {
     setBusy(p.id);
     try {
       await api.del(`/api/admin/products/${p.id}`);
-      setProducts((list) => list.filter((x) => x.id !== p.id));
       toast.success("Product deleted.", "Deleted");
+      /* If we just removed the last row on a non-first page, step back; otherwise
+         reload so totals and pagination stay accurate. */
+      if (products.length === 1 && page > 1) setPage((n) => n - 1);
+      else load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not delete.", "Failed");
     } finally {
@@ -89,13 +104,13 @@ export function ProductsTable() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search products…" className="w-full h-9 pl-10 pr-4 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40" />
+          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} type="search" placeholder="Search products…" className="w-full h-9 pl-10 pr-4 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40" />
         </div>
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-9 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none cursor-pointer">
+        <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1); }} className="h-9 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none cursor-pointer">
           <option value="">All categories</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={condition} onChange={(e) => setCondition(e.target.value)} className="h-9 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none cursor-pointer">
+        <select value={condition} onChange={(e) => { setCondition(e.target.value); setPage(1); }} className="h-9 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none cursor-pointer">
           <option value="">All conditions</option>
           <option value="new">New</option>
           <option value="used">Pre-owned</option>
@@ -157,6 +172,16 @@ export function ProductsTable() {
           </table>
         </div>
       </div>
+
+      {!loading && total > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-caption text-muted-foreground">
+            {total} {total === 1 ? "product" : "products"}
+            {pages > 1 ? ` · page ${page} of ${pages}` : ""}
+          </p>
+          <Pagination page={page} pages={pages} onPageChange={setPage} />
+        </div>
+      )}
     </div>
   );
 }

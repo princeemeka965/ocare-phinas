@@ -26,6 +26,8 @@ export { Input } from "./input";
 export type { InputProps } from "./input";
 export { Label } from "./label";
 export type { LabelProps } from "./label";
+export { Pagination } from "./pagination";
+export type { PaginationProps } from "./pagination";
 export { RadioGroup } from "./radio-group";
 export type { RadioGroupProps, RadioOption } from "./radio-group";
 export { Select } from "./select";

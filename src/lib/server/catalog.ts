@@ -45,7 +45,10 @@ function toCard(p: ProductWithRel): ProductCardData {
   };
 }
 
-export async function listProducts(f: CatalogFilters = {}, limit?: number): Promise<ProductCardData[]> {
+/** Default products shown per page on the storefront listing grids. */
+export const PRODUCTS_PER_PAGE = 12;
+
+function buildWhere(f: CatalogFilters): Prisma.ProductWhereInput {
   const where: Prisma.ProductWhereInput = { active: true };
   if (f.category) where.category = { slug: f.category };
   if (f.brand) where.brand = { name: f.brand };
@@ -53,17 +56,63 @@ export async function listProducts(f: CatalogFilters = {}, limit?: number): Prom
   if (f.condition === "pre_owned" || f.condition === "used") where.condition = "used";
   if (f.instock === "1") where.stockQuantity = { gt: 0 };
   if (f.q) where.name = { contains: f.q, mode: "insensitive" };
+  return where;
+}
 
-  const orderBy: Prisma.ProductOrderByWithRelationInput =
-    f.sort === "price_asc" ? { price: "asc" } : f.sort === "price_desc" ? { price: "desc" } : { createdAt: "desc" };
+function buildOrderBy(f: CatalogFilters): Prisma.ProductOrderByWithRelationInput {
+  return f.sort === "price_asc"
+    ? { price: "asc" }
+    : f.sort === "price_desc"
+      ? { price: "desc" }
+      : { createdAt: "desc" };
+}
 
+const CARD_INCLUDE = {
+  category: { select: { slug: true } },
+  brand: { select: { name: true } },
+} satisfies Prisma.ProductInclude;
+
+export async function listProducts(f: CatalogFilters = {}, limit?: number): Promise<ProductCardData[]> {
   const products = await prisma.product.findMany({
-    where,
-    orderBy,
-    include: { category: { select: { slug: true } }, brand: { select: { name: true } } },
+    where: buildWhere(f),
+    orderBy: buildOrderBy(f),
+    include: CARD_INCLUDE,
     ...(limit ? { take: limit } : {}),
   });
   return products.map(toCard);
+}
+
+export interface PagedProducts {
+  products: ProductCardData[];
+  /** Total products matching the filters (across all pages). */
+  total: number;
+  /** Current 1-based page (clamped to the valid range). */
+  page: number;
+  /** Total number of pages (at least 1). */
+  pages: number;
+  pageSize: number;
+}
+
+/** Paginated catalog read for the storefront listing grids. */
+export async function listProductsPaged(
+  f: CatalogFilters = {},
+  page = 1,
+  pageSize = PRODUCTS_PER_PAGE,
+): Promise<PagedProducts> {
+  const where = buildWhere(f);
+  const safePage = Math.max(1, Math.floor(page) || 1);
+  const [rows, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      orderBy: buildOrderBy(f),
+      include: CARD_INCLUDE,
+      skip: (safePage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ]);
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  return { products: rows.map(toCard), total, page: Math.min(safePage, pages), pages, pageSize };
 }
 
 export async function getProductBySlug(slug: string) {
