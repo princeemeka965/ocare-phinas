@@ -44,6 +44,7 @@ export function StorefrontHeader() {
   const [mounted, setMounted] = useState(false);
 
   const items = useCartStore((s) => s.items);
+  const clearCart = useCartStore((s) => s.clearCart);
   const user = useUserStore((s) => s.user);
   const clearUser = useUserStore((s) => s.clearUser);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -51,12 +52,16 @@ export function StorefrontHeader() {
   async function logout() {
     await api.post("/api/auth/logout").catch(() => {});
     clearUser();
+    /* The cart is tied to the signed-in customer — empty it on logout so it
+       never lingers or leaks to the next person on this device. */
+    clearCart();
   }
   const pathname = usePathname();
   const minimal = isMinimalChrome(pathname);
 
   useEffect(() => setMounted(true), []);
-  const count = mounted ? cartItemCount(items) : 0;
+  /* Cart is a logged-in-only feature, so the badge only counts when signed in. */
+  const count = mounted && user ? cartItemCount(items) : 0;
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 8);

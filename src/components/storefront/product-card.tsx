@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cartStore";
 import { toast } from "@/store/toastStore";
+import { useCartGuard } from "@/hooks/useCartGuard";
 
 export interface ProductCardData {
   id: string;
@@ -57,9 +58,11 @@ function formatPrice(n: number) {
 
 export function ProductCard({ product }: { product: ProductCardData }) {
   const addItem = useCartStore((s) => s.addItem);
+  const ensureLoggedIn = useCartGuard();
   const outOfStock = product.stockQuantity === 0;
 
   function handleAddToCart() {
+    if (!ensureLoggedIn()) return;
     addItem({
       id: product.id,
       name: product.name,

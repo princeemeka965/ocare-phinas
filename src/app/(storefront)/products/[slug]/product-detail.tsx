@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import { toast } from "@/store/toastStore";
+import { useCartGuard } from "@/hooks/useCartGuard";
 import { ProductCard, type ProductCardData } from "@/components/storefront/product-card";
 import { isGroupEligible, groupSlotsForPrice, dailyForSlots, naira } from "@/lib/pay-small-small";
 
@@ -42,6 +43,7 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
   const addItem = useCartStore((s) => s.addItem);
+  const ensureLoggedIn = useCartGuard();
 
   const outOfStock = product.stockQuantity === 0;
   const lowStock = product.stockQuantity > 0 && product.stockQuantity <= 5;
@@ -57,6 +59,7 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
   const itemQuery = `productId=${product.id}&item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(images[0] ?? "")}`;
 
   function handleAddToCart() {
+    if (!ensureLoggedIn()) return;
     for (let i = 0; i < qty; i++) {
       addItem({ id: product.id, name: product.name, slug: product.slug, price: product.price, image: images[0], stockQuantity: product.stockQuantity });
     }

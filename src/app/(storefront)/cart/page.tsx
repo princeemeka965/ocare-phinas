@@ -9,17 +9,30 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCartStore, cartItemCount } from "@/store/cartStore";
-import type { Metadata } from "next";
+import { useUserStore } from "@/store/userStore";
+import { AuthRequired } from "@/components/storefront/auth-required";
 
 export default function CartPage() {
   const [mounted, setMounted] = useState(false);
   const items = useCartStore((s) => s.items);
   const removeItem = useCartStore((s) => s.removeItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const user = useUserStore((s) => s.user);
 
   useEffect(() => setMounted(true), []);
 
   if (!mounted) return null;
+
+  /* The cart belongs to a signed-in customer — gate it behind login so items
+     only ever show to their owner (and never linger after logout). */
+  if (!user) {
+    return (
+      <AuthRequired
+        title="Log in to view your cart"
+        description="Your cart is saved to your account. Log in to see your items and check out."
+      />
+    );
+  }
 
   const count = cartItemCount(items);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
