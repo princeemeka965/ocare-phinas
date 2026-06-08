@@ -55,7 +55,16 @@ function buildWhere(f: CatalogFilters): Prisma.ProductWhereInput {
   if (f.condition === "new") where.condition = "new";
   if (f.condition === "pre_owned" || f.condition === "used") where.condition = "used";
   if (f.instock === "1") where.stockQuantity = { gt: 0 };
-  if (f.q) where.name = { contains: f.q, mode: "insensitive" };
+  if (f.q) {
+    /* A free-text query matches the product name, its brand, or its category —
+       so searching "Apple" or "Phones" surfaces the right products too. */
+    const contains = { contains: f.q, mode: "insensitive" } as const;
+    where.OR = [
+      { name: contains },
+      { brand: { is: { name: contains } } },
+      { category: { is: { name: contains } } },
+    ];
+  }
   return where;
 }
 

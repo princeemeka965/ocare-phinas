@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ShoppingCart, Minus, Plus, Wallet, ChevronRight, ChevronLeft,
-  ShieldCheck, RefreshCw, User, Users, Truck, Zap,
+  ShieldCheck, RefreshCw, Zap,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,6 @@ import { useCartStore } from "@/store/cartStore";
 import { toast } from "@/store/toastStore";
 import { useCartGuard } from "@/hooks/useCartGuard";
 import { ProductCard, type ProductCardData } from "@/components/storefront/product-card";
-import { isGroupEligible, groupSlotsForPrice, dailyForSlots, naira } from "@/lib/pay-small-small";
 
 export interface ProductDetailData {
   id: string;
@@ -51,12 +50,6 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
   const images = product.images;
   const imageCount = images.length;
   const mainImage = images[activeImg];
-
-  const groupEligible = isGroupEligible(product.price);
-  const groupSlots = groupSlotsForPrice(product.price);
-  const groupDaily = dailyForSlots(groupSlots);
-
-  const itemQuery = `productId=${product.id}&item=${product.slug}&name=${encodeURIComponent(product.name)}&price=${product.price}&image=${encodeURIComponent(images[0] ?? "")}`;
 
   function handleAddToCart() {
     if (!ensureLoggedIn()) return;
@@ -156,57 +149,23 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
             )}
           </div>
 
-          {/* Choose how to pay */}
-          <div className="space-y-3 pt-1">
-            <h2 className="text-body-sm font-semibold">Choose how to pay</h2>
-
-            <div className="rounded-2xl border-2 border-primary/40 bg-card p-4">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10"><ShoppingCart className="size-4 text-primary" /></div>
-                  <div>
-                    <p className="text-body-sm font-semibold">Outright Purchase</p>
-                    <p className="text-caption text-muted-foreground">Pay {formatPrice(product.price)} and get it now</p>
-                  </div>
-                </div>
-                <div className="flex items-center border border-border rounded-lg overflow-hidden flex-shrink-0">
-                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex size-9 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40" aria-label="Decrease quantity" disabled={qty <= 1}><Minus className="size-4" /></button>
-                  <span className="w-10 text-center text-body-sm font-semibold">{qty}</span>
-                  <button onClick={() => setQty((q) => Math.min(product.stockQuantity, q + 1))} className="flex size-9 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40" aria-label="Increase quantity" disabled={qty >= product.stockQuantity}><Plus className="size-4" /></button>
-                </div>
+          {/* Quantity + add to cart — payment method (outright / Pay Small Small)
+              is chosen later at checkout. */}
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-body-sm font-medium">Quantity</span>
+              <div className="flex items-center border border-border rounded-lg overflow-hidden flex-shrink-0">
+                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex size-9 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40" aria-label="Decrease quantity" disabled={qty <= 1}><Minus className="size-4" /></button>
+                <span className="w-10 text-center text-body-sm font-semibold">{qty}</span>
+                <button onClick={() => setQty((q) => Math.min(product.stockQuantity, q + 1))} className="flex size-9 items-center justify-center hover:bg-muted transition-colors disabled:opacity-40" aria-label="Increase quantity" disabled={qty >= product.stockQuantity}><Plus className="size-4" /></button>
               </div>
-              <Button size="lg" className="w-full gap-2" onClick={handleAddToCart} disabled={outOfStock}>
-                <ShoppingCart className="size-5" />{outOfStock ? "Out of stock" : "Add to cart"}
-              </Button>
             </div>
-
-            <Link href={`/pay-small-small/solo?${itemQuery}`} className="block rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-sm">
-              <div className="flex items-center gap-2.5 mb-1.5">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10"><User className="size-4 text-accent" /></div>
-                <div className="flex-1">
-                  <p className="text-body-sm font-semibold">Solo Plan</p>
-                  <p className="text-caption text-muted-foreground">Pay daily, weekly or monthly · delivered at 50%</p>
-                </div>
-                <ChevronRight className="size-4 text-muted-foreground flex-shrink-0" />
-              </div>
-              <p className="text-caption text-muted-foreground flex items-center gap-1.5 pl-11">
-                <Truck className="size-3.5 text-primary" />
-                Choose your amount and pace; we deliver at 50%, then you finish the balance
-              </p>
-            </Link>
-
-            {groupEligible && (
-              <Link href={`/pay-small-small/join?${itemQuery}`} className="block rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-sm">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10"><Users className="size-4 text-accent" /></div>
-                  <div className="flex-1">
-                    <p className="text-body-sm font-semibold">Group Plan</p>
-                    <p className="text-caption text-muted-foreground">{naira(groupDaily)}/day · {groupSlots} slot{groupSlots !== 1 ? "s" : ""} · delivered by group position</p>
-                  </div>
-                  <ChevronRight className="size-4 text-muted-foreground flex-shrink-0" />
-                </div>
-              </Link>
-            )}
+            <Button size="lg" className="w-full gap-2" onClick={handleAddToCart} disabled={outOfStock}>
+              <ShoppingCart className="size-5" />{outOfStock ? "Out of stock" : "Add to cart"}
+            </Button>
+            <p className="text-caption text-muted-foreground text-center">
+              Pay outright or with Pay Small Small — choose at checkout.
+            </p>
           </div>
 
           <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-2">

@@ -10,7 +10,15 @@ export async function GET(req: NextRequest) {
 
   const where: Prisma.ProductWhereInput = { active: true };
   const q = sp.get("q")?.trim();
-  if (q) where.name = { contains: q, mode: "insensitive" };
+  if (q) {
+    /* Match the product name, its brand, or its category. */
+    const contains = { contains: q, mode: "insensitive" } as const;
+    where.OR = [
+      { name: contains },
+      { brand: { is: { name: contains } } },
+      { category: { is: { name: contains } } },
+    ];
+  }
   const category = sp.get("category");
   if (category) where.category = { slug: category };
   const brand = sp.get("brand");

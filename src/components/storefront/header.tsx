@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Search,
   ShoppingCart,
   Menu,
   X,
@@ -26,6 +25,7 @@ import { Container } from "@/components/layout/container";
 import { useCartStore, cartItemCount } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { Logo } from "@/components/storefront/logo";
+import { HeaderSearch } from "@/components/storefront/header-search";
 import { isMinimalChrome } from "@/lib/chrome-routes";
 import { api } from "@/lib/api";
 
@@ -40,7 +40,6 @@ export function StorefrontHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [mounted, setMounted] = useState(false);
 
   const items = useCartStore((s) => s.items);
@@ -92,12 +91,6 @@ export function StorefrontHeader() {
     return () => { document.body.style.overflow = ""; };
   }, [mobileOpen]);
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (q) window.location.href = `/search?q=${encodeURIComponent(q)}`;
-  }
-
   return (
     <>
       <header
@@ -123,25 +116,9 @@ export function StorefrontHeader() {
             </Link>
 
             {/* Centre — search (laptop+) */}
-            <form
-              onSubmit={handleSearch}
-              className="absolute left-1/2 -translate-x-1/2 hidden lg:block w-full max-w-md xl:max-w-lg"
-            >
-              <div className="relative w-full">
-                <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none"
-                  aria-hidden
-                />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search phones, laptops, audio..."
-                  className="w-full h-10 pl-10 pr-4 rounded-lg border border-input bg-muted/50 text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
-                  aria-label="Search products"
-                />
-              </div>
-            </form>
+            <div className="absolute left-1/2 -translate-x-1/2 hidden lg:block w-full max-w-md xl:max-w-lg">
+              <HeaderSearch variant="desktop" />
+            </div>
 
             {/* Right — cart, account, hamburger */}
             <div className="flex items-center gap-0.5 ml-auto">
@@ -290,20 +267,7 @@ export function StorefrontHeader() {
 
           {/* Search — mobile (below main row) */}
           <div className="lg:hidden pb-3">
-            <form onSubmit={handleSearch} className="relative">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none"
-                aria-hidden
-              />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search electronics..."
-                className="w-full h-9 pl-10 pr-4 rounded-lg border border-input bg-muted/50 text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
-                aria-label="Search products"
-              />
-            </form>
+            <HeaderSearch variant="mobile" />
           </div>
         </Container>
       </header>

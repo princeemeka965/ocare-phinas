@@ -29,14 +29,14 @@ export function ToastContainer() {
       role="region"
       aria-label="Notifications"
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 w-full max-w-sm pointer-events-none px-4 sm:px-0"
+      className="fixed top-4 right-4 z-[60] flex flex-col gap-2 w-full max-w-sm pointer-events-none px-4 sm:px-0"
     >
       {toasts.map((t) => (
         <div
           key={t.id}
           className={cn(
             "pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-lg",
-            "animate-[fade-in-up_0.3s_ease-out_forwards]",
+            "animate-[fade-in-down_0.3s_ease-out_forwards]",
             styles[t.variant],
           )}
         >
