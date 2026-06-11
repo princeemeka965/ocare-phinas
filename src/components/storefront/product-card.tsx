@@ -33,7 +33,7 @@ const categoryBg: Record<string, string> = {
     "linear-gradient(135deg, oklch(0.55 0.13 165 / 0.18) 0%, oklch(0.58 0.11 150 / 0.25) 100%)",
   audio:
     "linear-gradient(135deg, oklch(0.5 0.15 285 / 0.18) 0%, oklch(0.55 0.13 300 / 0.25) 100%)",
-  appliances:
+  "home-appliances":
     "linear-gradient(135deg, oklch(0.65 0.15 50 / 0.18) 0%, oklch(0.7 0.13 60 / 0.25) 100%)",
   gaming:
     "linear-gradient(135deg, oklch(0.55 0.18 20 / 0.18) 0%, oklch(0.58 0.15 40 / 0.25) 100%)",

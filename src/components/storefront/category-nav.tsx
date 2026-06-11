@@ -1,36 +1,17 @@
 import Link from "next/link";
-import {
-  Smartphone,
-  Laptop,
-  Headphones,
-  Tv,
-  Cable,
-  Camera,
-  Gamepad2,
-  TabletSmartphone,
-  RefreshCw,
-} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/layout/container";
-
-const categories = [
-  { name: "Phones", slug: "phones", icon: Smartphone },
-  { name: "Laptops", slug: "laptops", icon: Laptop },
-  { name: "Tablets", slug: "tablets", icon: TabletSmartphone },
-  { name: "Audio", slug: "audio", icon: Headphones },
-  { name: "Appliances", slug: "appliances", icon: Tv },
-  { name: "Accessories", slug: "accessories", icon: Cable },
-  { name: "Gaming", slug: "gaming", icon: Gamepad2 },
-  { name: "Cameras", slug: "cameras", icon: Camera },
-  { name: "Pre-owned", slug: "pre-owned", icon: RefreshCw },
-];
+import { listCategories } from "@/lib/server/catalog";
+import { categoryPresentation, sortCategoriesForDisplay } from "@/lib/category-presentation";
 
 interface CategoryNavProps {
   activeCategorySlug?: string;
 }
 
-export function CategoryNav({ activeCategorySlug }: CategoryNavProps) {
+export async function CategoryNav({ activeCategorySlug }: CategoryNavProps) {
+  const categories = sortCategoriesForDisplay(await listCategories());
+
   return (
     <nav
       className="border-b border-border bg-card/60 backdrop-blur-sm"
@@ -39,7 +20,7 @@ export function CategoryNav({ activeCategorySlug }: CategoryNavProps) {
       <Container>
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-1.5 -mx-1 px-1">
           {categories.map((cat) => {
-            const Icon = cat.icon;
+            const { icon: Icon, navLabel } = categoryPresentation(cat.slug);
             const active = activeCategorySlug === cat.slug;
             return (
               <Link
@@ -58,7 +39,7 @@ export function CategoryNav({ activeCategorySlug }: CategoryNavProps) {
                   aria-hidden
                 />
                 <span className="text-micro font-medium whitespace-nowrap">
-                  {cat.name}
+                  {navLabel ?? cat.name}
                 </span>
               </Link>
             );

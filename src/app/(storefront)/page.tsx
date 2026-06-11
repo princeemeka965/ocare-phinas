@@ -1,14 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  Smartphone,
-  Laptop,
-  Headphones,
-  Tv,
-  Cable,
-  Camera,
-  Gamepad2,
-  TabletSmartphone,
   ShieldCheck,
   Truck,
   Banknote,
@@ -18,7 +10,6 @@ import {
   Wallet,
   Users,
   User,
-  RefreshCw,
   ChevronRight,
 } from "lucide-react";
 
@@ -30,7 +21,8 @@ import { HeroSection } from "@/components/storefront/hero-section";
 import { BrandLogo } from "@/components/storefront/brand-logo";
 import { CategoryImage } from "@/components/storefront/category-image";
 import { BRANDS, brandHref } from "@/lib/brands";
-import { listProducts } from "@/lib/server/catalog";
+import { listProducts, listCategories } from "@/lib/server/catalog";
+import { categoryPresentation, sortCategoriesForDisplay } from "@/lib/category-presentation";
 
 export const metadata: Metadata = {
   title: "OCare Phinas — Electronics Store Nigeria",
@@ -43,22 +35,7 @@ export const metadata: Metadata = {
   },
 };
 
-/* ------------------------------------------------------------------ */
-/* Mock data — replace with server fetch in Phase 3                     */
-/* ------------------------------------------------------------------ */
-/* Featured products are fetched from the DB in HomePage(). */
-
-const CATEGORIES = [
-  { name: "Phones", slug: "phones", icon: Smartphone, image: "/categories/phones.png", color: "text-cyan-500" },
-  { name: "Laptops", slug: "laptops", icon: Laptop, image: "/categories/laptops.png", color: "text-blue-500" },
-  { name: "Tablets", slug: "tablets", icon: TabletSmartphone, image: "/categories/tablets.png", color: "text-emerald-500" },
-  { name: "Audio", slug: "audio", icon: Headphones, image: "/categories/audio.png", color: "text-purple-500" },
-  { name: "Appliances", slug: "appliances", icon: Tv, image: "/categories/appliances.png", color: "text-orange-500" },
-  { name: "Accessories", slug: "accessories", icon: Cable, image: "/categories/accessories.png", color: "text-rose-500" },
-  { name: "Gaming", slug: "gaming", icon: Gamepad2, image: "/categories/gaming.png", color: "text-red-500" },
-  { name: "Cameras", slug: "cameras", icon: Camera, image: "/categories/cameras.png", color: "text-slate-500" },
-  { name: "Pre-owned (Tokunbo)", slug: "pre-owned", icon: RefreshCw, image: "/categories/pre-owned.png", color: "text-amber-500" },
-];
+/* Categories and featured products are fetched from the DB in HomePage(). */
 
 /* Curated brand strip for the homepage — full catalog lives in @/lib/brands */
 const STRIP_BRAND_SLUGS = [
@@ -104,14 +81,17 @@ const TRUST_POINTS = [
 /* Page                                                                 */
 /* ------------------------------------------------------------------ */
 export default async function HomePage() {
-  const featuredProducts = await listProducts({ instock: "1" }, 8);
+  const [featuredProducts, categories] = await Promise.all([
+    listProducts({ instock: "1" }, 8),
+    listCategories(),
+  ]);
   const hasFeatured = featuredProducts.length > 0;
 
   return (
     <>
       <HeroSection />
       <PaySmallSmallPromo />
-      <CategoryTiles />
+      <CategoryTiles categories={sortCategoriesForDisplay(categories)} />
       <BrandStrip />
       <FeaturedSection hasFeatured={hasFeatured} products={featuredProducts} />
       <TrustStrip />
@@ -220,7 +200,7 @@ function PaySmallSmallPromo() {
 /* ------------------------------------------------------------------ */
 /* Category tiles                                                       */
 /* ------------------------------------------------------------------ */
-function CategoryTiles() {
+function CategoryTiles({ categories }: { categories: { name: string; slug: string }[] }) {
   return (
     <section
       id="categories"
@@ -249,8 +229,9 @@ function CategoryTiles() {
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
-          {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
+          {categories.map((cat) => {
+            const { icon: Icon, color, image, tileLabel } = categoryPresentation(cat.slug);
+            const label = tileLabel ?? cat.name;
             const isPreowned = cat.slug === "pre-owned";
             return (
               <Link
@@ -265,14 +246,14 @@ function CategoryTiles() {
               >
                 <div className="flex h-12 w-full items-center justify-center">
                   <CategoryImage
-                    src={cat.image}
-                    alt={cat.name}
+                    src={image}
+                    alt={label}
                     imgClassName="max-h-full w-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
                     fallback={
                       <Icon
                         className={cn(
                           "size-10 sm:size-12 transition-transform duration-300 group-hover:scale-110",
-                          cat.color,
+                          color,
                         )}
                         aria-hidden
                       />
@@ -280,7 +261,7 @@ function CategoryTiles() {
                   />
                 </div>
                 <span className="text-body-sm sm:text-body font-semibold text-center leading-tight">
-                  {cat.name}
+                  {label}
                 </span>
               </Link>
             );

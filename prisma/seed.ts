@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 const BRANDS = ["LG", "Samsung", "Sony", "Mewe", "Iwin", "Binatone", "Ambiano", "Tower", "Silvercrest", "Panasonic"];
-const CATEGORIES = ["Phones", "Laptops", "Audio", "Home Appliances", "Gaming", "Pre-owned"];
+const CATEGORIES = ["Phones", "Laptops", "Tablets", "Audio", "Home Appliances", "Accessories", "Gaming", "Cameras", "Pre-owned"];
 
 async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD || "changeme123";
