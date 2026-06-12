@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
-import { getSettings } from "@/lib/settings";
 import { resolveDelivery } from "@/lib/delivery";
 import { nextOrderReference } from "@/lib/server/lifecycle";
 
@@ -52,9 +51,10 @@ export async function POST(req: NextRequest) {
     return jsonError(409, `"${problem.product?.name ?? "An item"}" is unavailable or out of stock. Update your cart.`);
   }
 
-  const settings = await getSettings();
   const subtotal = lines.reduce((s, l) => s + l.product!.price * l.item.qty, 0);
-  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, settings.deliveryFee, shipping);
+  /* Delivery fee is flat per product — charged once per line, never × qty. */
+  const cartFee = lines.reduce((s, l) => s + l.product!.deliveryFee, 0);
+  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, cartFee, shipping);
 
   const order = await prisma.order.create({
     data: {

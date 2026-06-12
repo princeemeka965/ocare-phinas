@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const perPayment = slots * settings.slotDaily;
-  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, settings.deliveryFee, shipping);
+  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, product.deliveryFee, shipping);
 
   const order = await prisma.$transaction(async (tx) => {
     const plan = await tx.plan.create({

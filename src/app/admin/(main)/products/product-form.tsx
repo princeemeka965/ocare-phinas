@@ -18,6 +18,7 @@ export interface ProductFormValues {
   name: string;
   description: string;
   price: number;
+  deliveryFee: number;
   stockQuantity: number;
   condition: "new" | "used";
   categoryId: string | null;
@@ -76,6 +77,7 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
   const [condition, setCondition] = useState<"new" | "used">(product?.condition ?? "new");
   const [description, setDescription] = useState(product?.description ?? "");
   const [price, setPrice] = useState(product ? String(product.price) : "");
+  const [deliveryFee, setDeliveryFee] = useState(product ? String(product.deliveryFee) : "");
   const [stock, setStock] = useState(product ? String(product.stockQuantity) : "");
   const [active, setActive] = useState(product?.active ?? true);
   const [images, setImages] = useState<string[]>(product?.images ?? []);
@@ -104,6 +106,7 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
       name: name.trim(),
       description: description.trim() || null,
       price: Number(price),
+      deliveryFee: Number(deliveryFee) || 0,
       stockQuantity: Number(stock) || 0,
       condition,
       categoryId: categoryId || null,
@@ -215,8 +218,9 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><label className={labelClass}>Price (₦) *</label><input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required min={0} placeholder="65990" className={inputClass} /></div>
           <div><label className={labelClass}>Stock quantity *</label><input type="number" value={stock} onChange={(e) => setStock(e.target.value)} required min={0} placeholder="10" className={inputClass} /></div>
+          <div><label className={labelClass}>Delivery fee (₦)</label><input type="number" value={deliveryFee} onChange={(e) => setDeliveryFee(e.target.value)} min={0} placeholder="2500" className={inputClass} /></div>
         </div>
-        <p className="text-caption text-muted-foreground -mt-1">Delivery fee is set once in Settings and applied to all orders.</p>
+        <p className="text-caption text-muted-foreground -mt-1">Flat fee for door delivery of this product, charged once per order regardless of quantity — set it to match its size and weight. Store pickup is always free.</p>
         <label className="flex items-center gap-2.5 cursor-pointer"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="rounded border-input text-primary" /><span className="text-body-sm font-medium">Active (visible to customers)</span></label>
       </div>
 

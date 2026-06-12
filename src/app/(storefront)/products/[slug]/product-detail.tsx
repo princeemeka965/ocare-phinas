@@ -23,6 +23,7 @@ export interface ProductDetailData {
   categoryName: string | null;
   categorySlug: string | null;
   price: number;
+  deliveryFee: number;
   stockQuantity: number;
   condition: "new" | "pre_owned";
   description: string | null;
@@ -54,7 +55,7 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
   function handleAddToCart() {
     if (!ensureLoggedIn()) return;
     for (let i = 0; i < qty; i++) {
-      addItem({ id: product.id, name: product.name, slug: product.slug, price: product.price, image: images[0], stockQuantity: product.stockQuantity });
+      addItem({ id: product.id, name: product.name, slug: product.slug, price: product.price, deliveryFee: product.deliveryFee, image: images[0], stockQuantity: product.stockQuantity });
     }
     toast.success(`${qty} × ${product.name} added to cart`, "Added to cart");
   }
@@ -140,6 +141,9 @@ export function ProductDetail({ product, related }: { product: ProductDetailData
             <p className="text-body-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
               <Wallet className="size-4 text-accent-foreground" />
               Or spread the cost with <strong className="text-foreground">Pay Small Small</strong> — daily, weekly or monthly
+            </p>
+            <p className="text-caption text-muted-foreground">
+              Door delivery: {product.deliveryFee > 0 ? formatPrice(product.deliveryFee) : "Free"} · Store pickup: Free
             </p>
             {lowStock && (
               <p className="text-caption font-medium text-foreground flex items-center gap-1.5">

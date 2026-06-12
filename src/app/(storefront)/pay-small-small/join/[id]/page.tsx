@@ -93,12 +93,10 @@ function JoinGroupConfirmInner() {
       };
     return emptyDeliveryForm();
   });
-  const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryError, setDeliveryError] = useState(false);
 
   useEffect(() => {
     api.get<{ groups: Group[] }>("/api/groups").then((d) => setGroups(d.groups)).catch(() => setGroups([]));
-    api.get<{ settings: { deliveryFee: number } }>("/api/settings").then((d) => setDeliveryFee(d.settings.deliveryFee)).catch(() => {});
     api.get<{ plans: MyPlan[] }>("/api/me/plans").then((d) => setMyPlans(d.plans)).catch(() => setMyPlans([]));
   }, []);
 
@@ -106,17 +104,20 @@ function JoinGroupConfirmInner() {
      running solo plan is fine — solo and group can run together. */
   const ongoingGroup = myPlans?.find((p) => p.type === "group" && isPlanOngoing(p.status)) ?? null;
 
-  /* Target item carried from a product page (productId required to join). */
+  /* Target item carried from a product page (productId required to join). The
+     item's own delivery fee rides along; missing (old links) means ₦0 shown —
+     the server always charges the product's real fee. */
   const productId = search.get("productId");
   const itemName = search.get("name");
   const itemPrice = Number(search.get("price"));
+  const itemDeliveryFee = Math.max(0, Number(search.get("deliveryFee")) || 0);
   const itemImage = search.get("image");
   const hasItem = Boolean(productId) && Boolean(itemName) && itemPrice > 0;
 
   const group = groups?.find((g) => g.id === id) ?? null;
   const itemSlots = hasItem ? groupSlotsForPrice(itemPrice) : 1;
   const daily = dailyForSlots(itemSlots);
-  const fee = delivery.method === "delivery" ? deliveryFee : 0;
+  const fee = delivery.method === "delivery" ? itemDeliveryFee : 0;
 
   /* ---------------------------- AUTH GATE --------------------------- */
   if (!user) {

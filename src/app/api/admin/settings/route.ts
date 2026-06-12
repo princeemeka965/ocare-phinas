@@ -18,7 +18,6 @@ const patchSchema = z
     bankAccountName: z.string(),
     bankAccountNumber: z.string(),
     whatsappNumber: z.string(),
-    deliveryFee: z.number().int().min(0),
     slotDaily: z.number().int().min(1),
     cycleDays: z.number().int().min(1),
     groupSlots: z.number().int().min(1),

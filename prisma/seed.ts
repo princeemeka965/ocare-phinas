@@ -23,7 +23,6 @@ async function main() {
       bankAccountName: "OCare Phinas Nigeria Ltd",
       bankAccountNumber: "0123456789",
       whatsappNumber: "2340000000000",
-      deliveryFee: 2500,
       slotDaily: 1000,
       cycleDays: 50,
       groupSlots: 10,

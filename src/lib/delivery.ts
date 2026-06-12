@@ -2,9 +2,11 @@
  * Delivery method — door delivery vs. store pickup                      *
  * ------------------------------------------------------------------ *
  * A customer pays the delivery fee only for door delivery; pickup is    *
- * free. For plans the fee is folded into what the schedule collects     *
- * (productPrice + deliveryFee). Shared by the order/plan APIs and the   *
- * storefront delivery picker so both agree on the fee and address.      *
+ * free. The fee is set per product (it varies by size/weight); a cart   *
+ * charges the sum of its items' fees. For plans the fee is folded into  *
+ * what the schedule collects (productPrice + deliveryFee). Shared by    *
+ * the order/plan APIs and the storefront delivery picker so both agree  *
+ * on the fee and address.                                               *
  * ------------------------------------------------------------------ */
 
 export type DeliveryMethod = "delivery" | "pickup";
@@ -25,19 +27,19 @@ export const PICKUP_SHIPPING: ShippingInput = {
 
 /**
  * Resolve the delivery fee + shipping record for a chosen method. Pickup is
- * always free and uses the store address; delivery charges the settings fee and
- * keeps the customer's address.
+ * always free and uses the store address; delivery charges the product fee
+ * (or the summed cart fee) and keeps the customer's address.
  */
 export function resolveDelivery(
   method: DeliveryMethod,
-  settingsFee: number,
+  productFee: number,
   shipping?: ShippingInput,
 ): { deliveryFee: number; shipping: ShippingInput } {
   if (method === "pickup") {
     return { deliveryFee: 0, shipping: { ...PICKUP_SHIPPING } };
   }
   return {
-    deliveryFee: settingsFee,
+    deliveryFee: productFee,
     shipping: {
       address: shipping?.address ?? "",
       city: shipping?.city ?? "",

@@ -51,6 +51,8 @@ interface SoloItem {
   id: string;
   name: string;
   price: number;
+  /** Per-product door-delivery fee (pickup is free). */
+  deliveryFee: number;
   image: string;
 }
 
@@ -60,14 +62,20 @@ function SoloPlanInner() {
   const user = useUserStore((s) => s.user);
 
   /* A product page can deep-link here with a chosen item:
-     /pay-small-small/solo?productId=…&name=…&price=…&image=… — we preselect it. */
+     /pay-small-small/solo?productId=…&name=…&price=…&deliveryFee=…&image=… — we preselect it. */
   const params = useSearchParams();
   const prefillId = params.get("productId");
   const prefillName = params.get("name");
   const prefillPrice = Number(params.get("price"));
   const prefill: SoloItem | null =
     prefillId && prefillName && prefillPrice > 0
-      ? { id: prefillId, name: prefillName, price: prefillPrice, image: params.get("image") || PLACEHOLDER_IMG }
+      ? {
+          id: prefillId,
+          name: prefillName,
+          price: prefillPrice,
+          deliveryFee: Math.max(0, Number(params.get("deliveryFee")) || 0),
+          image: params.get("image") || PLACEHOLDER_IMG,
+        }
       : null;
 
   /* Catalog items the customer can put on a solo plan (real products). */
@@ -78,20 +86,16 @@ function SoloPlanInner() {
      `null` while loading; `[]` when signed out or none. */
   const [myPlans, setMyPlans] = useState<MyPlan[] | null>(null);
 
-  /* Door delivery vs. store pickup — the fee (delivery only) folds into the plan total. */
+  /* Door delivery vs. store pickup — the item's own fee (delivery only) folds
+     into the plan total. */
   const [delivery, setDelivery] = useState<DeliveryForm>(emptyDeliveryForm);
-  const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryError, setDeliveryError] = useState(false);
 
   useEffect(() => {
     api
-      .get<{ products: { id: string; name: string; price: number; images: string[] }[] }>("/api/products?limit=40&sort=price_desc")
-      .then((d) => setItems(d.products.map((p) => ({ id: p.id, name: p.name, price: p.price, image: p.images[0] ?? PLACEHOLDER_IMG }))))
+      .get<{ products: { id: string; name: string; price: number; deliveryFee: number; images: string[] }[] }>("/api/products?limit=40&sort=price_desc")
+      .then((d) => setItems(d.products.map((p) => ({ id: p.id, name: p.name, price: p.price, deliveryFee: p.deliveryFee, image: p.images[0] ?? PLACEHOLDER_IMG }))))
       .catch(() => setItems([]));
-    api
-      .get<{ settings: { deliveryFee: number } }>("/api/settings")
-      .then((d) => setDeliveryFee(d.settings.deliveryFee))
-      .catch(() => {});
     api
       .get<{ plans: MyPlan[] }>("/api/me/plans")
       .then((d) => setMyPlans(d.plans))
@@ -101,10 +105,11 @@ function SoloPlanInner() {
   /* An ongoing solo plan blocks starting another (a group plan does not). */
   const ongoingSolo = myPlans?.find((p) => p.type === "solo" && isPlanOngoing(p.status)) ?? null;
 
-  const fee = delivery.method === "delivery" ? deliveryFee : 0;
-
-  /* Effective list: the deep-linked item first, then the catalog. */
-  const itemList = prefill ? [prefill, ...items.filter((i) => i.id !== prefill.id)] : items;
+  /* Effective list: the deep-linked item first, then the catalog. Once the
+     catalog loads, its copy wins so the price and delivery fee are current. */
+  const itemList = prefill
+    ? [items.find((i) => i.id === prefill.id) ?? prefill, ...items.filter((i) => i.id !== prefill.id)]
+    : items;
 
   const [step, setStep] = useState<"pick" | "configure" | "done">(prefill ? "configure" : "pick");
   const [selectedItem, setSelectedItem] = useState<string | null>(prefill ? prefill.id : null);
@@ -120,6 +125,7 @@ function SoloPlanInner() {
 
   const freqMeta = SOLO_FREQUENCIES[frequency];
   const selected = itemList.find((i) => i.id === selectedItem);
+  const fee = delivery.method === "delivery" ? (selected?.deliveryFee ?? 0) : 0;
   const amount = Number(amountInput);
   const amountValid =
     !!selected && amount >= freqMeta.min && amount <= selected.price;

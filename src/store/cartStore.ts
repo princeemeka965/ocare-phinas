@@ -5,6 +5,8 @@ export interface CartItem {
   id: string;
   name: string;
   price: number;
+  /** Flat door-delivery fee for this product (set by the admin; not × quantity). */
+  deliveryFee: number;
   quantity: number;
   image?: string;
   slug: string;
@@ -56,8 +58,15 @@ export const useCartStore = create<CartState>()(
   ),
 );
 
-export const cartItemCount = (items: CartItem[]) =>
-  items.reduce((sum, i) => sum + i.quantity, 0);
+/* "Items in the cart" = distinct products, not summed quantities — 10 units
+   of one product is still 1 item (header badge, cart/checkout counts). */
+export const cartItemCount = (items: CartItem[]) => items.length;
 
 export const cartSubtotal = (items: CartItem[]) =>
   items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+
+/* Door-delivery fee for the whole cart — each product's flat fee charged once,
+   regardless of quantity. Carts persisted before fees moved onto products may
+   lack the field. */
+export const cartDeliveryFee = (items: CartItem[]) =>
+  items.reduce((sum, i) => sum + (i.deliveryFee ?? 0), 0);

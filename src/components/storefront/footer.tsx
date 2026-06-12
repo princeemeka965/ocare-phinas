@@ -9,6 +9,7 @@ const quickLinks = [
   { label: "Contact Us", href: "/contact" },
   { label: "Pre-owned Items", href: "/category/pre-owned" },
   { label: "Shop by Brand", href: "/brands" },
+  { label: "Delivery & Shipping", href: "/delivery" },
 ];
 
 const accountLinks = [
@@ -156,6 +157,12 @@ export function StorefrontFooter() {
               className="text-caption text-muted-foreground hover:text-foreground transition-colors"
             >
               Warranty Policy
+            </Link>
+            <Link
+              href="/delivery"
+              className="text-caption text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Delivery Policy
             </Link>
           </div>
         </div>

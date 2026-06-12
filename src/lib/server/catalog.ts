@@ -23,6 +23,8 @@ export interface CatalogFilters {
   condition?: string; // "new" | "pre_owned" | "used"
   sort?: string; // "price_asc" | "price_desc" | newest
   instock?: string; // "1"
+  minPrice?: string; // ₦, inclusive
+  maxPrice?: string; // ₦, inclusive
   q?: string;
 }
 
@@ -37,6 +39,7 @@ function toCard(p: ProductWithRel): ProductCardData {
     slug: p.slug,
     brand: p.brand?.name ?? "",
     price: p.price,
+    deliveryFee: p.deliveryFee,
     stockQuantity: p.stockQuantity,
     stockLabel: stockLabel(p.stockQuantity),
     categorySlug: p.category?.slug ?? "accessories",
@@ -55,6 +58,14 @@ function buildWhere(f: CatalogFilters): Prisma.ProductWhereInput {
   if (f.condition === "new") where.condition = "new";
   if (f.condition === "pre_owned" || f.condition === "used") where.condition = "used";
   if (f.instock === "1") where.stockQuantity = { gt: 0 };
+  const minPrice = Math.floor(Number(f.minPrice));
+  const maxPrice = Math.floor(Number(f.maxPrice));
+  if (minPrice > 0 || maxPrice > 0) {
+    where.price = {
+      ...(minPrice > 0 ? { gte: minPrice } : {}),
+      ...(maxPrice > 0 ? { lte: maxPrice } : {}),
+    };
+  }
   if (f.q) {
     /* A free-text query matches the product name, its brand, or its category —
        so searching "Apple" or "Phones" surfaces the right products too. */

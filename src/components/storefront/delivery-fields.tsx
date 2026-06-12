@@ -6,7 +6,7 @@ import { FormField, Input, Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { PICKUP_SHIPPING, type DeliveryMethod, type ShippingInput } from "@/lib/delivery";
 
-/* Nigerian states (delivery is a single flat fee from Settings; pickup is free). */
+/* Nigerian states (the delivery fee is set per product; pickup is free). */
 export const NG_STATES = [
   "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
   "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",

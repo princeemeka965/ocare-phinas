@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
-import { getSettings } from "@/lib/settings";
 import { slotsForPrice, SOLO_MIN_DAILY } from "@/lib/pay-small-small";
 import { resolveDelivery } from "@/lib/delivery";
 import { hasActivePlanOfType, nextOrderReference } from "@/lib/server/lifecycle";
@@ -35,8 +34,7 @@ export async function POST(req: NextRequest) {
     return jsonError(409, "You already have an active Solo Plan. Complete it before starting another.");
   }
 
-  const settings = await getSettings();
-  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, settings.deliveryFee, shipping);
+  const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, product.deliveryFee, shipping);
   const order = await prisma.$transaction(async (tx) => {
     const plan = await tx.plan.create({
       data: {

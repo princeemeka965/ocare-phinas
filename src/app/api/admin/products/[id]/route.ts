@@ -24,6 +24,7 @@ const patchSchema = z
     name: z.string().min(2),
     description: z.string().nullable(),
     price: z.number().int().min(0),
+    deliveryFee: z.number().int().min(0),
     stockQuantity: z.number().int().min(0),
     condition: z.enum(["new", "used"]),
     categoryId: z.string().nullable(),

@@ -12,6 +12,7 @@ import {
   Landmark,
   ShieldCheck,
   Lock,
+  RotateCcw,
   Wallet,
   User,
   Users,
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
-import { useCartStore, cartItemCount, cartSubtotal } from "@/store/cartStore";
+import { useCartStore, cartItemCount, cartSubtotal, cartDeliveryFee } from "@/store/cartStore";
 import { useUserStore } from "@/store/userStore";
 import { toast } from "@/store/toastStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
@@ -71,17 +72,10 @@ export default function CheckoutPage() {
   const [soloAmount, setSoloAmount] = useState("");
   const [method, setMethod] = useState<"delivery" | "pickup">("delivery");
   const [state, setState] = useState("");
-  const [settingsFee, setSettingsFee] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => setMounted(true), []);
-  useEffect(() => {
-    api
-      .get<{ settings: { deliveryFee: number } }>("/api/settings")
-      .then((d) => setSettingsFee(d.settings.deliveryFee))
-      .catch(() => {});
-  }, []);
 
   if (!mounted) return null;
 
@@ -121,7 +115,8 @@ export default function CheckoutPage() {
   }
 
   const isDelivery = method === "delivery";
-  const deliveryFee = isDelivery ? settingsFee : 0;
+  /* Each product carries its own door-delivery fee — the cart pays the sum. */
+  const deliveryFee = isDelivery ? cartDeliveryFee(items) : 0;
   const total = subtotal + deliveryFee;
 
   /* ----------------------- Plan derivations ----------------------- */
@@ -262,6 +257,7 @@ export default function CheckoutPage() {
         productId: line.id,
         name: line.name,
         price: String(line.price),
+        deliveryFee: String(line.deliveryFee ?? 0),
         image: line.image ?? "",
         method,
       });
@@ -729,6 +725,26 @@ export default function CheckoutPage() {
                   </p>
                 </div>
               )}
+
+              {/* Return policy note — full policy lives at /returns */}
+              <div className="flex items-start gap-3 rounded-xl border border-border p-3">
+                <div className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground flex-shrink-0">
+                  <RotateCcw className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-body-sm font-semibold">Return Policy</p>
+                  <p className="text-caption text-muted-foreground mt-0.5">
+                    Free return within 7 days for all eligible items{" "}
+                    <Link
+                      href="/returns"
+                      target="_blank"
+                      className="text-primary font-medium hover:underline underline-offset-2"
+                    >
+                      Details
+                    </Link>
+                  </p>
+                </div>
+              </div>
 
               <Button
                 type="submit"

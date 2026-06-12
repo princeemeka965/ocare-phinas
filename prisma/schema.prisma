@@ -166,6 +166,8 @@ model Product {
   slug          String    @unique
   description   String?
   price         Int
+  // Door-delivery fee for this product (varies by size/weight); pickup is free.
+  deliveryFee   Int       @default(0)
   stockQuantity Int       @default(0)
   condition     Condition @default(new)
   images        String[]
@@ -368,7 +370,6 @@ model Settings {
   bankAccountName   String @default("")
   bankAccountNumber String @default("")
   whatsappNumber    String @default("")
-  deliveryFee       Int    @default(2500)
   // Pay Small Small defaults (slot engine is fixed business logic).
   slotDaily         Int    @default(1000)
   cycleDays         Int    @default(50)

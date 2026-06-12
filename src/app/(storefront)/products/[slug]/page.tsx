@@ -39,6 +39,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
     categoryName: product.category?.name ?? null,
     categorySlug: product.category?.slug ?? null,
     price: product.price,
+    deliveryFee: product.deliveryFee,
     stockQuantity: product.stockQuantity,
     condition: product.condition === "new" ? "new" : "pre_owned",
     description: product.description,

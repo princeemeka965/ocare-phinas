@@ -16,6 +16,7 @@ export interface ProductCardData {
   slug: string;
   brand: string;
   price: number;
+  deliveryFee: number;
   stockQuantity: number;
   stockLabel: "In stock" | "Low stock" | "Out of stock";
   categorySlug: string;
@@ -68,6 +69,7 @@ export function ProductCard({ product }: { product: ProductCardData }) {
       name: product.name,
       slug: product.slug,
       price: product.price,
+      deliveryFee: product.deliveryFee,
       image: product.image,
       stockQuantity: product.stockQuantity,
     });

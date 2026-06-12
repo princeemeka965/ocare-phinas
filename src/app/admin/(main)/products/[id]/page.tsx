@@ -15,6 +15,7 @@ interface ApiProduct {
   name: string;
   description: string | null;
   price: number;
+  deliveryFee: number;
   stockQuantity: number;
   condition: "new" | "used";
   categoryId: string | null;
@@ -40,6 +41,7 @@ export default function EditProductPage() {
           name: p.name,
           description: p.description ?? "",
           price: p.price,
+          deliveryFee: p.deliveryFee,
           stockQuantity: p.stockQuantity,
           condition: p.condition,
           categoryId: p.categoryId,

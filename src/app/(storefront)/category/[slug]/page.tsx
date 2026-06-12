@@ -1,28 +1,42 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
-import { SlidersHorizontal, ArrowUpDown, X } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
-import { ProductCard, ProductCardSkeleton } from "@/components/storefront/product-card";
+import { ProductCard } from "@/components/storefront/product-card";
+import {
+  buildFilterHref,
+  CatalogNavLink,
+  CatalogNavProvider,
+  CatalogResults,
+  FilterChip,
+  FilterGroup,
+  FilterLink,
+  MobileFilterGroup,
+  PriceRangeForm,
+  RESULTS_ID,
+  SortLinks,
+} from "@/components/storefront/catalog-filters";
+import { ScrollToResults } from "@/components/storefront/scroll-to-results";
 import { listProductsPaged, getCategoryBySlug, listBrandNames } from "@/lib/server/catalog";
 
 const PREOWNED_SLUG = "pre-owned";
 
+type Filters = {
+  brand?: string;
+  condition?: string;
+  sort?: string;
+  instock?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  page?: string;
+};
+
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{
-    brand?: string;
-    condition?: string;
-    sort?: string;
-    instock?: string;
-    minPrice?: string;
-    maxPrice?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<Filters>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -36,9 +50,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+/** Chip label for an active min/max price filter. */
+function priceChipLabel(min?: string, max?: string): string | false {
+  const lo = Number(min) > 0 ? `₦${Number(min).toLocaleString("en-NG")}` : "";
+  const hi = Number(max) > 0 ? `₦${Number(max).toLocaleString("en-NG")}` : "";
+  if (lo && hi) return `Price: ${lo} – ${hi}`;
+  if (lo) return `Price: from ${lo}`;
+  if (hi) return `Price: up to ${hi}`;
+  return false;
+}
+
 export default async function CategoryPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const filters = await searchParams;
+  const basePath = `/category/${slug}`;
 
   const isPreowned = slug === PREOWNED_SLUG;
   const category = isPreowned ? null : await getCategoryBySlug(slug);
@@ -49,10 +74,12 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   const [paged, brands] = await Promise.all([
     listProductsPaged(
       {
-        ...(isPreowned ? { condition: "used" } : { category: slug }),
+        ...(isPreowned ? {} : { category: slug }),
         brand: filters.brand,
         condition: isPreowned ? "used" : filters.condition,
         instock: filters.instock,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
         sort: filters.sort,
       },
       page,
@@ -61,23 +88,32 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   ]);
   const { products, total, page: currentPage, pages } = paged;
 
-  /* Preserve active filters when moving between pages; drop `page` itself. */
-  function pageHref(target: number): string {
-    const params = new URLSearchParams();
-    if (filters.brand) params.set("brand", filters.brand);
-    if (filters.condition) params.set("condition", filters.condition);
-    if (filters.instock) params.set("instock", filters.instock);
-    if (filters.sort) params.set("sort", filters.sort);
-    if (target > 1) params.set("page", String(target));
-    const qs = params.toString();
-    return qs ? `/category/${slug}?${qs}` : `/category/${slug}`;
-  }
+  const activeChips = [
+    filters.brand && {
+      label: `Brand: ${filters.brand}`,
+      href: buildFilterHref(basePath, filters, { brand: undefined }),
+    },
+    !isPreowned &&
+      filters.condition && {
+        label: `Condition: ${filters.condition === "new" ? "New" : "Pre-owned"}`,
+        href: buildFilterHref(basePath, filters, { condition: undefined }),
+      },
+    filters.instock === "1" && {
+      label: "In stock only",
+      href: buildFilterHref(basePath, filters, { instock: undefined }),
+    },
+    (() => {
+      const priceLabel = priceChipLabel(filters.minPrice, filters.maxPrice);
+      return (
+        priceLabel && {
+          label: priceLabel,
+          href: buildFilterHref(basePath, filters, { minPrice: undefined, maxPrice: undefined }),
+        }
+      );
+    })(),
+  ].filter(Boolean) as { label: string; href: string }[];
 
-  const activeFilters = [
-    filters.brand && `Brand: ${filters.brand}`,
-    filters.condition && `Condition: ${filters.condition === "new" ? "New" : "Pre-owned"}`,
-    filters.instock === "1" && "In stock only",
-  ].filter(Boolean) as string[];
+  const hasFilters = activeChips.length > 0;
 
   return (
     <div className="py-8 sm:py-12">
@@ -93,59 +129,103 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
             <div>
               <h1 className="text-h1 font-bold">{label}</h1>
               <p className="text-muted-foreground mt-1">
-                {total} {total === 1 ? "product" : "products"} found
+                {total} {total === 1 ? "product" : "products"}
+                {hasFilters ? " match your filters" : " found"}
                 {pages > 1 ? ` · page ${currentPage} of ${pages}` : ""}
               </p>
             </div>
           </div>
         </div>
 
+        <CatalogNavProvider>
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar filters — desktop */}
-          <aside className="hidden lg:block w-56 flex-shrink-0 space-y-6" aria-label="Filters">
-            <FilterPanel slug={slug} filters={filters} isPreowned={isPreowned} brands={brands} />
+          <aside className="hidden lg:block w-56 flex-shrink-0" aria-label="Filters">
+            <FilterPanel basePath={basePath} filters={filters} isPreowned={isPreowned} brands={brands} />
           </aside>
 
           {/* Main content */}
           <div className="flex-1 min-w-0">
             {/* Toolbar */}
             <div className="flex items-center gap-3 mb-5 flex-wrap">
-              {/* Mobile filter button */}
-              <button className="lg:hidden flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-body-sm hover:bg-muted transition-colors">
-                <SlidersHorizontal className="size-4" />
-                Filters
-                {activeFilters.length > 0 && (
-                  <Badge variant="default" className="ml-1 text-micro">{activeFilters.length}</Badge>
-                )}
-              </button>
-
-              {/* Active filter chips */}
-              {activeFilters.map((f) => (
-                <span
-                  key={f}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/30 bg-primary/10 text-caption text-primary font-medium"
-                >
-                  {f}
-                  <X className="size-3 cursor-pointer hover:text-destructive" aria-label={`Remove filter ${f}`} />
-                </span>
+              {activeChips.map((chip) => (
+                <FilterChip key={chip.label} label={chip.label} href={chip.href} />
               ))}
+              {hasFilters && (
+                <CatalogNavLink
+                  href={basePath}
+                  className="text-caption text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Clear all
+                </CatalogNavLink>
+              )}
 
               {/* Sort */}
-              <div className="ml-auto flex items-center gap-2">
-                <ArrowUpDown className="size-4 text-muted-foreground" aria-hidden />
-                <select
-                  defaultValue={filters.sort ?? ""}
-                  className="text-body-sm border border-input rounded-lg px-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
-                  aria-label="Sort products"
+              <SortLinks basePath={basePath} filters={filters} />
+            </div>
+
+            {/* Mobile filters — collapsible dropdowns, none open by default */}
+            <div className="lg:hidden mb-6 space-y-2">
+              <MobileFilterGroup title="Brand" selected={filters.brand}>
+                {brands.map((b) => (
+                  <FilterLink
+                    key={b}
+                    label={b}
+                    active={filters.brand === b}
+                    href={buildFilterHref(basePath, filters, {
+                      brand: filters.brand === b ? undefined : b,
+                    })}
+                  />
+                ))}
+              </MobileFilterGroup>
+
+              {!isPreowned && (
+                <MobileFilterGroup
+                  title="Condition"
+                  selected={filters.condition ? (filters.condition === "new" ? "New" : "Pre-owned") : undefined}
                 >
-                  <option value="">Newest first</option>
-                  <option value="price_asc">Price: Low → High</option>
-                  <option value="price_desc">Price: High → Low</option>
-                </select>
+                  {[
+                    { value: "new", label: "New" },
+                    { value: "pre_owned", label: "Pre-owned (Tokunbo / UK Used)" },
+                  ].map((opt) => (
+                    <FilterLink
+                      key={opt.value}
+                      label={opt.label}
+                      active={filters.condition === opt.value}
+                      href={buildFilterHref(basePath, filters, {
+                        condition: filters.condition === opt.value ? undefined : opt.value,
+                      })}
+                    />
+                  ))}
+                </MobileFilterGroup>
+              )}
+
+              <MobileFilterGroup
+                title="Price"
+                selected={priceChipLabel(filters.minPrice, filters.maxPrice) || undefined}
+              >
+                <div className="px-2 py-1.5">
+                  <PriceRangeForm basePath={basePath} filters={filters} />
+                </div>
+              </MobileFilterGroup>
+
+              <div className="rounded-xl border border-border bg-card px-2 py-1.5">
+                <FilterLink
+                  label="In stock only"
+                  active={filters.instock === "1"}
+                  href={buildFilterHref(basePath, filters, {
+                    instock: filters.instock === "1" ? undefined : "1",
+                  })}
+                />
               </div>
             </div>
 
-            {/* Product grid */}
+            {/* Product grid — on mobile a filter tap scrolls here at once; the
+                old results dim behind a loading pill until the server responds. */}
+            <Suspense fallback={null}>
+              <ScrollToResults targetId={RESULTS_ID} />
+            </Suspense>
+            <CatalogResults>
             {products.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -153,7 +233,12 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
-                <Pagination page={currentPage} pages={pages} hrefFor={pageHref} className="mt-10" />
+                <Pagination
+                  page={currentPage}
+                  pages={pages}
+                  hrefFor={(p) => buildFilterHref(basePath, filters, { page: p === 1 ? undefined : String(p) })}
+                  className="mt-10"
+                />
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border">
@@ -161,107 +246,77 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
                 <p className="text-body-sm text-muted-foreground mb-5">
                   Try adjusting or clearing your filters.
                 </p>
-                <Link href={`/category/${slug}`} className={buttonVariants({ variant: "outline" })}>
+                <CatalogNavLink href={basePath} className={buttonVariants({ variant: "outline" })}>
                   Clear filters
-                </Link>
+                </CatalogNavLink>
               </div>
             )}
+            </CatalogResults>
           </div>
         </div>
+        </CatalogNavProvider>
       </Container>
     </div>
   );
 }
 
 function FilterPanel({
-  slug,
+  basePath,
   filters,
   isPreowned,
   brands,
 }: {
-  slug: string;
-  filters: { brand?: string; condition?: string; instock?: string };
+  basePath: string;
+  filters: Filters;
   isPreowned: boolean;
   brands: string[];
 }) {
   return (
-    <div className="space-y-6">
-      {/* Brand filter */}
-      <div>
-        <h3 className="text-body-sm font-semibold mb-3">Brand</h3>
-        <div className="space-y-1.5">
-          {brands.map((brand) => (
-            <label key={brand} className="flex items-center gap-2.5 cursor-pointer group">
-              <input
-                type="checkbox"
-                defaultChecked={filters.brand === brand}
-                className="rounded border-input text-primary focus:ring-primary"
-              />
-              <span className="text-body-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                {brand}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-7">
+      {/* Brand */}
+      <FilterGroup title="Brand">
+        {brands.map((b) => (
+          <FilterLink
+            key={b}
+            label={b}
+            active={filters.brand === b}
+            href={buildFilterHref(basePath, filters, {
+              brand: filters.brand === b ? undefined : b,
+            })}
+          />
+        ))}
+      </FilterGroup>
 
-      {/* Condition filter (hide on Pre-owned category) */}
+      {/* Condition (hidden on the Pre-owned view — it's forced there) */}
       {!isPreowned && (
-        <div>
-          <h3 className="text-body-sm font-semibold mb-3">Condition</h3>
-          <div className="space-y-1.5">
-            {[
-              { value: "new", label: "New" },
-              { value: "pre_owned", label: "Pre-owned (Tokunbo / UK Used)" },
-            ].map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
-                <input
-                  type="radio"
-                  name="condition"
-                  value={opt.value}
-                  defaultChecked={filters.condition === opt.value}
-                  className="text-primary focus:ring-primary"
-                />
-                <span className="text-body-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                  {opt.label}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
+        <FilterGroup title="Condition">
+          {[
+            { value: "new", label: "New" },
+            { value: "pre_owned", label: "Pre-owned (Tokunbo / UK Used)" },
+          ].map((opt) => (
+            <FilterLink
+              key={opt.value}
+              label={opt.label}
+              active={filters.condition === opt.value}
+              href={buildFilterHref(basePath, filters, {
+                condition: filters.condition === opt.value ? undefined : opt.value,
+              })}
+            />
+          ))}
+        </FilterGroup>
       )}
 
-      {/* In stock only */}
-      <div>
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            defaultChecked={filters.instock === "1"}
-            className="rounded border-input text-primary focus:ring-primary"
-          />
-          <span className="text-body-sm font-medium">In stock only</span>
-        </label>
-      </div>
+      {/* In stock */}
+      <FilterLink
+        label="In stock only"
+        active={filters.instock === "1"}
+        href={buildFilterHref(basePath, filters, {
+          instock: filters.instock === "1" ? undefined : "1",
+        })}
+      />
 
       {/* Price range */}
-      <div>
-        <h3 className="text-body-sm font-semibold mb-3">Price Range (₦)</h3>
-        <div className="flex gap-2 items-center">
-          <input
-            type="number"
-            placeholder="Min"
-            className="w-full h-9 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
-          />
-          <span className="text-muted-foreground flex-shrink-0">–</span>
-          <input
-            type="number"
-            placeholder="Max"
-            className="w-full h-9 px-3 rounded-lg border border-input bg-background text-body-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
-          />
-        </div>
-      </div>
+      <PriceRangeForm basePath={basePath} filters={filters} />
     </div>
   );
 }
-
-export { ProductCardSkeleton };

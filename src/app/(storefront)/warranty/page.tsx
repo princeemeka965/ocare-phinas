@@ -196,6 +196,7 @@ const sections: LegalSection[] = [
           <li>Cosmetic scratches.</li>
           <li>Physical damage.</li>
           <li>Water damage.</li>
+          <li>Phone screens, TV screens, and the screens of any other appliances that use a screen.</li>
           <li>Software issues caused by customer installations.</li>
           <li>Damage caused by electrical surges.</li>
           <li>Damage caused by misuse.</li>
