@@ -9,6 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toastStore";
 import { api, ApiError } from "@/lib/api";
+import { uploadToCloudinary } from "@/lib/cloudinary-upload";
 
 interface Option { id: string; name: string }
 interface Spec { key: string; value: string }
@@ -34,35 +35,6 @@ const labelClass = "text-body-sm font-medium block mb-1.5";
 const MAX_IMAGES = 3;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-
-interface CloudinarySignature {
-  cloudName: string;
-  apiKey: string;
-  timestamp: number;
-  folder: string;
-  signature: string;
-}
-
-/** Upload a single file straight to Cloudinary using a server-issued signature. */
-async function uploadToCloudinary(file: File): Promise<string> {
-  const sig = await api.post<CloudinarySignature>("/api/admin/cloudinary-signature");
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("api_key", sig.apiKey);
-  fd.append("timestamp", String(sig.timestamp));
-  fd.append("folder", sig.folder);
-  fd.append("signature", sig.signature);
-
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
-    method: "POST",
-    body: fd,
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data?.secure_url) {
-    throw new Error(data?.error?.message ?? "Cloudinary upload failed.");
-  }
-  return data.secure_url as string;
-}
 
 export function ProductForm({ product }: { product?: ProductFormValues }) {
   const router = useRouter();
@@ -156,7 +128,7 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
 
     setUploading(true);
     try {
-      const urls = await Promise.all(valid.map(uploadToCloudinary));
+      const urls = await Promise.all(valid.map((f) => uploadToCloudinary(f, "products")));
       setImages((prev) => [...prev, ...urls].slice(0, MAX_IMAGES));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed.", "Failed");

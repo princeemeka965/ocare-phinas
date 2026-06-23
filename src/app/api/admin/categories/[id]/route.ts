@@ -4,10 +4,19 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { slugify } from "@/lib/slug";
+import { buildCategoryIcon } from "@/lib/server/category-icon";
 
 type Params = { params: Promise<{ id: string }> };
 
-const schema = z.object({ name: z.string().min(2) });
+const schema = z
+  .object({
+    name: z.string().min(2).optional(),
+    /** Original Cloudinary upload URL; the server removes the background + traces an icon. */
+    image: z.string().url().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.image !== undefined, {
+    message: "Nothing to update.",
+  });
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const gate = await requireAdmin("categories");
@@ -20,11 +29,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const exists = await prisma.category.findUnique({ where: { id } });
   if (!exists) return jsonError(404, "Category not found.");
 
-  const category = await prisma.category.update({
-    where: { id },
-    data: { name: parsed.data.name, slug: slugify(parsed.data.name) },
-  });
-  return NextResponse.json({ category });
+  const data: { name?: string; slug?: string; image?: string; iconSvg?: string | null } = {};
+  if (parsed.data.name !== undefined) {
+    data.name = parsed.data.name;
+    data.slug = slugify(parsed.data.name);
+  }
+
+  let backgroundRemovalFailed = false;
+  if (parsed.data.image !== undefined) {
+    const icon = await buildCategoryIcon(parsed.data.image);
+    data.image = icon.image;
+    data.iconSvg = icon.iconSvg;
+    backgroundRemovalFailed = icon.backgroundRemovalFailed;
+  }
+
+  const category = await prisma.category.update({ where: { id }, data });
+  return NextResponse.json({ category, backgroundRemovalFailed });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {

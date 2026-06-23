@@ -149,6 +149,11 @@ model Category {
   id       String    @id @default(cuid())
   name     String
   slug     String    @unique
+  // Background-removed (transparent) image URL — shown on homepage tiles.
+  image    String?
+  // Generated monochrome silhouette SVG (uses currentColor) — shown in the
+  // header category strip, matching the curated Lucide icons.
+  iconSvg  String?
   products Product[]
 }
 

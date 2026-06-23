@@ -46,3 +46,37 @@ export const BRANDS: Brand[] = [
 export function brandHref(name: string) {
   return `/products?brand=${encodeURIComponent(name)}`;
 }
+
+const BRAND_BY_SLUG = new Map(BRANDS.map((b) => [b.slug, b]));
+
+/** Props for the `BrandLogo` component. */
+export interface BrandLogoProps {
+  name: string;
+  logoSlug?: string;
+  logoUrl?: string;
+  logoUrlDark?: string;
+  invertOnDark?: boolean;
+}
+
+/**
+ * Resolve the logo for a DB brand. Curated/seeded brands keep their hand-picked
+ * artwork (Simple Icons / local assets); any other brand uses its uploaded DB
+ * logo, falling back to initials when neither is available (handled by BrandLogo).
+ */
+export function resolveBrandLogo(brand: {
+  name: string;
+  slug: string;
+  logo?: string | null;
+}): BrandLogoProps {
+  const curated = BRAND_BY_SLUG.get(brand.slug);
+  if (curated) {
+    return {
+      name: brand.name,
+      logoSlug: curated.logoSlug,
+      logoUrl: curated.logoUrl,
+      logoUrlDark: curated.logoUrlDark,
+      invertOnDark: curated.invertOnDark,
+    };
+  }
+  return { name: brand.name, logoUrl: brand.logo ?? undefined };
+}

@@ -143,7 +143,10 @@ export async function getProductBySlug(slug: string) {
 }
 
 export async function listCategories() {
-  return prisma.category.findMany({ orderBy: { name: "asc" }, select: { name: true, slug: true } });
+  return prisma.category.findMany({
+    orderBy: { name: "asc" },
+    select: { name: true, slug: true, image: true, iconSvg: true },
+  });
 }
 
 export async function listBrandNames(): Promise<string[]> {

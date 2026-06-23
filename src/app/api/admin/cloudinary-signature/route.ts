@@ -1,16 +1,37 @@
 import { createHash } from "crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 
 /**
  * POST /api/admin/cloudinary-signature — issue a short-lived signature so the
- * admin's browser can upload a product image directly to Cloudinary without ever
+ * admin's browser can upload an image directly to Cloudinary without ever
  * exposing the API secret. Signed uploads (vs. an unsigned preset) keep the
- * endpoint admin-only. See product-form.tsx for the matching upload call.
+ * endpoint admin-only. See product-form.tsx / catalog-manager.tsx for the
+ * matching upload calls.
+ *
+ * Body: `{ folder?: "products" | "categories" | "brands" }` (defaults to
+ * "products"). The caller must hold the matching admin permission for that area.
  */
-export async function POST() {
-  const gate = await requireAdmin("products");
+const FOLDERS = {
+  products: { permission: "products", path: "ocare-phinas/products" },
+  categories: { permission: "categories", path: "ocare-phinas/categories" },
+  // Brands are managed alongside categories, so they share that permission.
+  brands: { permission: "categories", path: "ocare-phinas/brands" },
+} as const;
+
+type FolderKey = keyof typeof FOLDERS;
+
+function folderKey(value: unknown): FolderKey {
+  return value === "categories" || value === "brands" ? value : "products";
+}
+
+export async function POST(req: NextRequest) {
+  const body = (await req.json().catch(() => ({}))) as { folder?: string };
+  const key = folderKey(body.folder);
+  const { permission, path: folder } = FOLDERS[key];
+
+  const gate = await requireAdmin(permission);
   if ("response" in gate) return gate.response;
 
   const apiKey = process.env.CLOUDINARY_API_KEY;
@@ -21,7 +42,6 @@ export async function POST() {
   }
 
   const timestamp = Math.round(Date.now() / 1000);
-  const folder = "ocare-phinas/products";
 
   // Cloudinary signature: the signed params sorted by key as `k=v&k=v`, with the
   // API secret appended, hashed with SHA-1. Only sign what the client also sends.

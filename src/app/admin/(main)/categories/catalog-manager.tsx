@@ -1,14 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Edit, Trash2, AlertTriangle, Loader2, ImagePlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/store/toastStore";
 import { api, ApiError } from "@/lib/api";
+import { uploadToCloudinary, type UploadFolder } from "@/lib/cloudinary-upload";
 
-interface Row { id: string; name: string; slug: string; _count: { products: number } }
+interface Row {
+  id: string;
+  name: string;
+  slug: string;
+  image?: string | null;
+  iconSvg?: string | null;
+  logo?: string | null;
+  _count: { products: number };
+}
 type Kind = "categories" | "brands";
+
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Image cell for a category or brand row. Uploads the source photo to
+ * Cloudinary, then the server removes the background. Categories additionally
+ * get a generated header icon (silhouette SVG); brands are image-only.
+ */
+function ImageUploadCell({ kind, row, onChange }: { kind: Kind; row: Row; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const isCategory = kind === "categories";
+  const folder: UploadFolder = isCategory ? "categories" : "brands";
+  const field = isCategory ? "image" : "logo"; // PATCH body key
+  const image = isCategory ? row.image : row.logo;
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      toast.error("Use a JPG, PNG, WebP or AVIF image.", "Unsupported file");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      toast.error("Image must be 5 MB or smaller.", "Too large");
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = await uploadToCloudinary(file, folder);
+      const res = await api.patch<{ backgroundRemovalFailed: boolean }>(
+        `/api/admin/${kind}/${row.id}`,
+        { [field]: url },
+      );
+      onChange();
+      if (res.backgroundRemovalFailed) {
+        toast.info(
+          "Image saved, but the background couldn't be removed automatically — enable Cloudinary AI Background Removal, or upload a transparent PNG.",
+          "Heads up",
+        );
+      } else {
+        toast.success(`${isCategory ? "Category image" : "Brand logo"} updated.`, "Saved");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.", "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Generated header icon (silhouette) — categories only */}
+      {isCategory && (
+        <span
+          className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-foreground [&>svg]:size-5"
+          title="Header icon"
+          aria-hidden
+          {...(row.iconSvg
+            ? { dangerouslySetInnerHTML: { __html: row.iconSvg } }
+            : { children: <span className="text-micro text-muted-foreground">—</span> })}
+        />
+      )}
+      {/* Transparent image thumbnail */}
+      <span className="flex size-9 items-center justify-center rounded-lg border border-border bg-[conic-gradient(#0000_90deg,#00000010_0)] bg-[length:8px_8px] overflow-hidden">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt="" className="size-full object-contain" />
+        ) : (
+          <span className="text-micro text-muted-foreground">—</span>
+        )}
+      </span>
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        className="flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-caption hover:bg-muted transition-colors disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
+        {busy ? "Working…" : image ? "Replace" : "Upload"}
+      </button>
+      <input ref={inputRef} type="file" accept={ACCEPTED_TYPES.join(",")} onChange={handleFile} className="hidden" />
+    </div>
+  );
+}
 
 function Section({
   title,
@@ -24,6 +120,8 @@ function Section({
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const singular = kind === "categories" ? "category" : "brand";
+  const imageHeading = kind === "categories" ? "Image & icon" : "Logo";
+  const colSpan = 5; // Name, Slug, Image, Products, Actions
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -84,18 +182,22 @@ function Section({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Name</th>
               <th className="text-left py-3 px-4 font-semibold text-muted-foreground hidden sm:table-cell">Slug</th>
+              <th className="text-left py-3 px-4 font-semibold text-muted-foreground">{imageHeading}</th>
               <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Products</th>
               <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.length === 0 ? (
-              <tr><td colSpan={4} className="py-10 text-center text-body-sm text-muted-foreground">No {title.toLowerCase()} yet.</td></tr>
+              <tr><td colSpan={colSpan} className="py-10 text-center text-body-sm text-muted-foreground">No {title.toLowerCase()} yet.</td></tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-4 font-medium">{row.name}</td>
                   <td className="py-3 px-4 text-muted-foreground font-mono text-caption hidden sm:table-cell">{row.slug}</td>
+                  <td className="py-3 px-4">
+                    <ImageUploadCell kind={kind} row={row} onChange={onChange} />
+                  </td>
                   <td className="py-3 px-4 text-right text-muted-foreground">{row._count.products}</td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-end gap-2">

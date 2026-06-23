@@ -34,10 +34,20 @@ export async function CategoryNav({ activeCategorySlug }: CategoryNavProps) {
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon
-                  className="size-[18px] transition-transform duration-200 group-hover:scale-110"
-                  aria-hidden
-                />
+                {cat.iconSvg ? (
+                  // Generated silhouette — inherits currentColor like the Lucide icons.
+                  // Server-built and rebuilt from path data only (see category-icon.ts), so safe to inline.
+                  <span
+                    className="size-[18px] transition-transform duration-200 group-hover:scale-110 [&>svg]:size-full"
+                    aria-hidden
+                    dangerouslySetInnerHTML={{ __html: cat.iconSvg }}
+                  />
+                ) : (
+                  <Icon
+                    className="size-[18px] transition-transform duration-200 group-hover:scale-110"
+                    aria-hidden
+                  />
+                )}
                 <span className="text-micro font-medium whitespace-nowrap">
                   {navLabel ?? cat.name}
                 </span>

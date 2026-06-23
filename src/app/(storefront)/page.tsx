@@ -20,9 +20,16 @@ import { ProductCard, type ProductCardData } from "@/components/storefront/produ
 import { HeroSection } from "@/components/storefront/hero-section";
 import { BrandLogo } from "@/components/storefront/brand-logo";
 import { CategoryImage } from "@/components/storefront/category-image";
-import { BRANDS, brandHref } from "@/lib/brands";
-import { listProducts, listCategories } from "@/lib/server/catalog";
+import { brandHref, resolveBrandLogo } from "@/lib/brands";
+import { listProducts, listCategories, listBrands } from "@/lib/server/catalog";
 import { categoryPresentation, sortCategoriesForDisplay } from "@/lib/category-presentation";
+
+/* Categories and featured products are read from the DB at request time.
+   Without this, Next.js statically prerenders the homepage at build time and
+   freezes the tiles/featured grid to whatever the DB held during `yarn build`
+   (so newly-added categories/products never appear). ISR keeps it fast while
+   refreshing the cached HTML at most once per minute. */
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "OCare Phinas — Electronics Store Nigeria",
@@ -37,8 +44,9 @@ export const metadata: Metadata = {
 
 /* Categories and featured products are fetched from the DB in HomePage(). */
 
-/* Curated brand strip for the homepage — full catalog lives in @/lib/brands */
-const STRIP_BRAND_SLUGS = [
+/* The homepage brand strip is driven by the DB brands. Seeded/known brands lead
+   in this order; admin-added brands follow by product count then name. */
+const STRIP_PRIORITY = [
   "lg",
   "samsung",
   "sony",
@@ -50,9 +58,26 @@ const STRIP_BRAND_SLUGS = [
   "silvercrest",
   "panasonic",
 ];
-const STRIP_BRANDS = STRIP_BRAND_SLUGS.map(
-  (slug) => BRANDS.find((b) => b.slug === slug)!,
-).filter(Boolean);
+
+/** Max brands shown in the homepage strip (overflow lives on /brands). */
+const STRIP_LIMIT = 12;
+
+type StripBrand = { name: string; slug: string; logo: string | null; _count: { products: number } };
+
+function sortStripBrands(brands: StripBrand[]): StripBrand[] {
+  const weight = (slug: string) => {
+    const i = STRIP_PRIORITY.indexOf(slug);
+    return i === -1 ? STRIP_PRIORITY.length : i;
+  };
+  return [...brands]
+    .sort(
+      (a, b) =>
+        weight(a.slug) - weight(b.slug) ||
+        b._count.products - a._count.products ||
+        a.name.localeCompare(b.name),
+    )
+    .slice(0, STRIP_LIMIT);
+}
 
 const TRUST_POINTS = [
   {
@@ -81,9 +106,10 @@ const TRUST_POINTS = [
 /* Page                                                                 */
 /* ------------------------------------------------------------------ */
 export default async function HomePage() {
-  const [featuredProducts, categories] = await Promise.all([
+  const [featuredProducts, categories, brands] = await Promise.all([
     listProducts({ instock: "1" }, 8),
     listCategories(),
+    listBrands(),
   ]);
   const hasFeatured = featuredProducts.length > 0;
 
@@ -92,7 +118,7 @@ export default async function HomePage() {
       <HeroSection />
       <PaySmallSmallPromo />
       <CategoryTiles categories={sortCategoriesForDisplay(categories)} />
-      <BrandStrip />
+      <BrandStrip brands={sortStripBrands(brands)} />
       <FeaturedSection hasFeatured={hasFeatured} products={featuredProducts} />
       <TrustStrip />
     </>
@@ -200,7 +226,20 @@ function PaySmallSmallPromo() {
 /* ------------------------------------------------------------------ */
 /* Category tiles                                                       */
 /* ------------------------------------------------------------------ */
-function CategoryTiles({ categories }: { categories: { name: string; slug: string }[] }) {
+
+/** Short letter mark used as a placeholder when a category has no image:
+ *  initials of the first two words, else the first two letters. */
+function categoryAbbreviation(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.trim().slice(0, 2).toUpperCase();
+}
+
+function CategoryTiles({
+  categories,
+}: {
+  categories: { name: string; slug: string; image?: string | null }[];
+}) {
   return (
     <section
       id="categories"
@@ -230,8 +269,10 @@ function CategoryTiles({ categories }: { categories: { name: string; slug: strin
 
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
           {categories.map((cat) => {
-            const { icon: Icon, color, image, tileLabel } = categoryPresentation(cat.slug);
+            const { color, image: fallbackImage, tileLabel } = categoryPresentation(cat.slug);
             const label = tileLabel ?? cat.name;
+            // Prefer the admin-uploaded transparent image; fall back to curated artwork.
+            const image = cat.image ?? fallbackImage;
             const isPreowned = cat.slug === "pre-owned";
             return (
               <Link
@@ -250,13 +291,15 @@ function CategoryTiles({ categories }: { categories: { name: string; slug: strin
                     alt={label}
                     imgClassName="max-h-full w-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
                     fallback={
-                      <Icon
+                      <span
                         className={cn(
-                          "size-10 sm:size-12 transition-transform duration-300 group-hover:scale-110",
+                          "text-h2 font-bold tracking-tight transition-transform duration-300 group-hover:scale-110",
                           color,
                         )}
                         aria-hidden
-                      />
+                      >
+                        {categoryAbbreviation(cat.name)}
+                      </span>
                     }
                   />
                 </div>
@@ -275,7 +318,8 @@ function CategoryTiles({ categories }: { categories: { name: string; slug: strin
 /* ------------------------------------------------------------------ */
 /* Shop by Brand strip (A1 spec)                                       */
 /* ------------------------------------------------------------------ */
-function BrandStrip() {
+function BrandStrip({ brands }: { brands: StripBrand[] }) {
+  if (brands.length === 0) return null;
   return (
     <section
       aria-labelledby="brands-heading"
@@ -303,28 +347,31 @@ function BrandStrip() {
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-10 gap-2 sm:gap-3">
-          {STRIP_BRANDS.map((brand) => (
-            <Link
-              key={brand.slug}
-              href={brandHref(brand.name)}
-              className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 aspect-square p-2.5"
-            >
-              <div className="flex h-12 w-full sm:h-12 items-center justify-center">
-                <BrandLogo
-                  name={brand.name}
-                  logoSlug={brand.logoSlug}
-                  logoUrl={brand.logoUrl}
-                  logoUrlDark={brand.logoUrlDark}
-                  invertOnDark={brand.invertOnDark}
-                  imgClassName="max-h-full w-full max-w-full"
-                  textClassName="text-body font-bold text-foreground/70 group-hover:text-primary transition-colors"
-                />
-              </div>
-              <span className="text-micro font-medium text-muted-foreground group-hover:text-foreground transition-colors text-center leading-tight">
-                {brand.name}
-              </span>
-            </Link>
-          ))}
+          {brands.map((brand) => {
+            const logo = resolveBrandLogo(brand);
+            return (
+              <Link
+                key={brand.slug}
+                href={brandHref(brand.name)}
+                className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 aspect-square p-2.5"
+              >
+                <div className="flex h-12 w-full sm:h-12 items-center justify-center">
+                  <BrandLogo
+                    name={logo.name}
+                    logoSlug={logo.logoSlug}
+                    logoUrl={logo.logoUrl}
+                    logoUrlDark={logo.logoUrlDark}
+                    invertOnDark={logo.invertOnDark}
+                    imgClassName="max-h-full w-full max-w-full"
+                    textClassName="text-body font-bold text-foreground/70 group-hover:text-primary transition-colors"
+                  />
+                </div>
+                <span className="text-micro font-medium text-muted-foreground group-hover:text-foreground transition-colors text-center leading-tight">
+                  {brand.name}
+                </span>
+              </Link>
+            );
+          })}
         </div>
       </Container>
     </section>
