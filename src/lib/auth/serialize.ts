@@ -1,4 +1,4 @@
-import type { Customer } from "@prisma/client";
+import type { Customer } from "@/lib/db/types";
 
 /** Customer fields safe to return to the client (never the password hash). */
 export function publicCustomer(c: Customer) {

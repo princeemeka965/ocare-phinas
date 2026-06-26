@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { currentCustomer, requireCustomer, jsonError } from "@/lib/auth/guards";
 import { publicCustomer } from "@/lib/auth/serialize";
+import type { Customer } from "@/lib/db/types";
 
 export async function GET() {
   const customer = await currentCustomer();
@@ -25,25 +26,27 @@ export async function PATCH(req: NextRequest) {
 
   // Guard uniqueness when email/phone change.
   if (email && email !== gate.customer.email) {
-    if (await prisma.customer.findFirst({ where: { email, NOT: { id: gate.customer.id } } })) {
-      return jsonError(409, "That email is already in use.");
-    }
+    const { data } = await supabase.from("Customer").select("id").eq("email", email).neq("id", gate.customer.id).maybeSingle();
+    if (data) return jsonError(409, "That email is already in use.");
   }
   if (phone && phone !== gate.customer.phone) {
-    if (await prisma.customer.findFirst({ where: { phone, NOT: { id: gate.customer.id } } })) {
-      return jsonError(409, "That phone number is already in use.");
-    }
+    const { data } = await supabase.from("Customer").select("id").eq("phone", phone).neq("id", gate.customer.id).maybeSingle();
+    if (data) return jsonError(409, "That phone number is already in use.");
   }
 
   const phoneChanged = phone !== undefined && phone !== gate.customer.phone;
-  const customer = await prisma.customer.update({
-    where: { id: gate.customer.id },
-    data: {
-      ...(name !== undefined ? { name } : {}),
-      ...(email !== undefined ? { email } : {}),
-      ...(phone !== undefined ? { phone } : {}),
-      ...(phoneChanged ? { phoneVerified: false } : {}), // re-verify on phone change
-    },
-  });
+  const customer = unwrap(
+    await supabase
+      .from("Customer")
+      .update({
+        ...(name !== undefined ? { name } : {}),
+        ...(email !== undefined ? { email } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+        ...(phoneChanged ? { phoneVerified: false } : {}), // re-verify on phone change
+      })
+      .eq("id", gate.customer.id)
+      .select("*")
+      .single(),
+  ) as Customer;
   return NextResponse.json({ customer: publicCustomer(customer) });
 }

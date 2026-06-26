@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
+import type { Customer } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,9 +20,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "A boolean `blocked` is required.");
 
-  const customer = await prisma.customer.findUnique({ where: { id } });
+  const { data: customer } = await supabase.from("Customer").select("id").eq("id", id).maybeSingle();
   if (!customer) return jsonError(404, "Customer not found.");
 
-  const updated = await prisma.customer.update({ where: { id }, data: { blocked: parsed.data.blocked } });
+  const updated = unwrap(
+    await supabase.from("Customer").update({ blocked: parsed.data.blocked }).eq("id", id).select("*").single(),
+  ) as Customer;
   return NextResponse.json({ blocked: updated.blocked });
 }

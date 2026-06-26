@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { getProductBySlug } from "@/lib/server/catalog";
 import { jsonError } from "@/lib/auth/guards";
 import {
   planMath,
@@ -36,14 +36,8 @@ function planSummary(price: number) {
 // Public — single product by slug.
 export async function GET(_req: NextRequest, { params }: Params) {
   const { slug } = await params;
-  const product = await prisma.product.findFirst({
-    where: { slug, active: true },
-    include: {
-      category: { select: { name: true, slug: true } },
-      brand: { select: { name: true, slug: true } },
-    },
-  });
+  const product = await getProductBySlug(slug);
   if (!product) return jsonError(404, "Product not found.");
 
-  return NextResponse.json({ product, plan: planSummary(product.price) });
+  return NextResponse.json({ product, plan: planSummary((product as { price: number }).price) });
 }

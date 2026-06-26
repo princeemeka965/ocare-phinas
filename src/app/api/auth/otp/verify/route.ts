@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { verifyOtp } from "@/lib/auth/password";
 import { jsonError } from "@/lib/auth/guards";
+import type { OtpCode } from "@/lib/db/types";
 
 const schema = z.object({ phone: z.string().min(7), code: z.string().length(6) });
 
@@ -14,20 +15,27 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return jsonError(400, "Phone and a 6-digit code are required.");
   const { phone, code } = parsed.data;
 
-  const otp = await prisma.otpCode.findFirst({
-    where: { phone, consumedAt: null, expiresAt: { gt: new Date() } },
-    orderBy: { createdAt: "desc" },
-  });
+  const rows = unwrap(
+    await supabase
+      .from("OtpCode")
+      .select("*")
+      .eq("phone", phone)
+      .is("consumedAt", null)
+      .gt("expiresAt", new Date().toISOString())
+      .order("createdAt", { ascending: false })
+      .limit(1),
+  ) as OtpCode[];
+  const otp = rows[0];
   if (!otp || otp.attempts >= MAX_ATTEMPTS) return jsonError(400, "Code expired or invalid. Request a new one.");
 
   if (!(await verifyOtp(code, otp.codeHash))) {
-    await prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+    await supabase.from("OtpCode").update({ attempts: otp.attempts + 1 }).eq("id", otp.id);
     return jsonError(400, "Incorrect code.");
   }
 
-  await prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
+  await supabase.from("OtpCode").update({ consumedAt: new Date().toISOString() }).eq("id", otp.id);
   // Mark the matching customer's phone verified, if one exists.
-  await prisma.customer.updateMany({ where: { phone }, data: { phoneVerified: true } });
+  await supabase.from("Customer").update({ phoneVerified: true }).eq("phone", phone);
 
   return NextResponse.json({ ok: true });
 }

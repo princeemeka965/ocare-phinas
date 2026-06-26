@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
 import { getSettings } from "@/lib/settings";
 import { isGroupEligible, GROUP_MAX_SLOTS_PER_CUSTOMER } from "@/lib/pay-small-small";
 import { resolveDelivery } from "@/lib/delivery";
 import { hasActivePlanOfType, nextOrderReference } from "@/lib/server/lifecycle";
+import type { Group, Order, Plan, Product } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -29,11 +30,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!parsed.success) return jsonError(400, "Choose a product and 1–2 slots.");
   const { productId, slots, deliveryMethod, shipping } = parsed.data;
 
-  const [group, product, settings] = await Promise.all([
-    prisma.group.findUnique({ where: { id } }),
-    prisma.product.findFirst({ where: { id: productId, active: true } }),
+  const [groupRes, productRes, settings] = await Promise.all([
+    supabase.from("Group").select("*").eq("id", id).maybeSingle<Group>(),
+    supabase.from("Product").select("*").eq("id", productId).eq("active", true).maybeSingle<Product>(),
     getSettings(),
   ]);
+  const group = groupRes.data;
+  const product = productRes.data;
   if (!group || group.status !== "open") return jsonError(404, "This group isn't open to join.");
   if (!product) return jsonError(404, "Product not found.");
   if (!isGroupEligible(product.price)) return jsonError(400, "Group plans are only for items of ₦100,000 or less.");
@@ -45,9 +48,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const perPayment = slots * settings.slotDaily;
   const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, product.deliveryFee, shipping);
 
-  const order = await prisma.$transaction(async (tx) => {
-    const plan = await tx.plan.create({
-      data: {
+  const plan = unwrap(
+    await supabase
+      .from("Plan")
+      .insert({
         customerId: gate.customer.id,
         type: "group",
         groupId: group.id,
@@ -57,20 +61,30 @@ export async function POST(req: NextRequest, { params }: Params) {
         slots,
         perPayment,
         frequency: "daily",
-        startDate: new Date(),
+        startDate: new Date().toISOString(),
         status: "active",
-      },
-    });
-    await tx.groupMembership.create({
-      data: { groupId: group.id, customerId: gate.customer.id, position: group.slotsFilled + 1, slotsHeld: slots },
-    });
-    const slotsFilled = group.slotsFilled + slots;
-    await tx.group.update({
-      where: { id: group.id },
-      data: { slotsFilled, status: slotsFilled >= group.totalSlots ? "closed" : "open" },
-    });
-    return tx.order.create({
-      data: {
+      })
+      .select("*")
+      .single(),
+  ) as Plan;
+
+  await supabase.from("GroupMembership").insert({
+    groupId: group.id,
+    customerId: gate.customer.id,
+    position: group.slotsFilled + 1,
+    slotsHeld: slots,
+  });
+
+  const slotsFilled = group.slotsFilled + slots;
+  await supabase
+    .from("Group")
+    .update({ slotsFilled, status: slotsFilled >= group.totalSlots ? "closed" : "open" })
+    .eq("id", group.id);
+
+  const order = unwrap(
+    await supabase
+      .from("Order")
+      .insert({
         reference: await nextOrderReference(),
         customerId: gate.customer.id,
         status: "in_plan",
@@ -82,22 +96,27 @@ export async function POST(req: NextRequest, { params }: Params) {
         shipAddress: ship.address,
         shipCity: ship.city,
         shipState: ship.state,
-        shipLandmark: ship.landmark,
+        shipLandmark: ship.landmark ?? null,
         planId: plan.id,
-        items: {
-          create: {
-            productId: product.id,
-            name: product.name,
-            condition: product.condition,
-            price: product.price,
-            qty: 1,
-            image: product.images[0] ?? null,
-          },
-        },
-      },
-      include: { plan: true, items: true },
-    });
-  });
+      })
+      .select("*")
+      .single(),
+  ) as Order;
 
-  return NextResponse.json({ order }, { status: 201 });
+  const items = unwrap(
+    await supabase
+      .from("OrderItem")
+      .insert({
+        orderId: order.id,
+        productId: product.id,
+        name: product.name,
+        condition: product.condition,
+        price: product.price,
+        qty: 1,
+        image: product.images[0] ?? null,
+      })
+      .select("*"),
+  );
+
+  return NextResponse.json({ order: { ...order, plan, items } }, { status: 201 });
 }

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { hashPassword } from "@/lib/auth/password";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { ASSIGNABLE_PERMISSIONS, type AdminPermission } from "@/lib/admin-access";
+import type { AdminUser } from "@/lib/db/types";
 
 const ASSIGNABLE = new Set<string>(ASSIGNABLE_PERMISSIONS);
 
@@ -14,7 +15,7 @@ function cleanPerms(perms: string[]): AdminPermission[] | null {
   return [...new Set(perms)] as AdminPermission[];
 }
 
-function shape(admin: { id: string; name: string; email: string; createdAt: Date; disabled: boolean; permissions: { permission: string }[] }) {
+function shape(admin: { id: string; name: string; email: string; createdAt: string; disabled: boolean; permissions: { permission: string }[] }) {
   return {
     id: admin.id,
     name: admin.name,
@@ -30,11 +31,13 @@ export async function GET() {
   const gate = await requireAdmin("team");
   if ("response" in gate) return gate.response;
 
-  const subs = await prisma.adminUser.findMany({
-    where: { role: "sub" },
-    include: { permissions: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const subs = unwrap(
+    await supabase
+      .from("AdminUser")
+      .select("id,name,email,createdAt,disabled,permissions:AdminPermissionGrant(permission)")
+      .eq("role", "sub")
+      .order("createdAt", { ascending: false }),
+  ) as Parameters<typeof shape>[0][];
   return NextResponse.json({ subAdmins: subs.map(shape) });
 }
 
@@ -55,21 +58,30 @@ export async function POST(req: NextRequest) {
   const perms = cleanPerms(parsed.data.permissions);
   if (!perms) return jsonError(400, "Invalid permission — \"team\" can't be granted to a sub-admin.");
 
-  if (await prisma.adminUser.findUnique({ where: { email: parsed.data.email } })) {
-    return jsonError(409, "An admin with this email already exists.");
-  }
+  const { data: dup } = await supabase.from("AdminUser").select("id").eq("email", parsed.data.email).maybeSingle();
+  if (dup) return jsonError(409, "An admin with this email already exists.");
 
-  const admin = await prisma.adminUser.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash: await hashPassword(parsed.data.password),
-      role: "sub",
-      mustChangePassword: true,
-      createdById: gate.admin.id,
-      permissions: { create: perms.map((permission) => ({ permission })) },
-    },
-    include: { permissions: true },
-  });
-  return NextResponse.json({ subAdmin: shape(admin) }, { status: 201 });
+  const admin = unwrap(
+    await supabase
+      .from("AdminUser")
+      .insert({
+        name: parsed.data.name,
+        email: parsed.data.email,
+        passwordHash: await hashPassword(parsed.data.password),
+        role: "sub",
+        mustChangePassword: true,
+        createdById: gate.admin.id,
+      })
+      .select("*")
+      .single(),
+  ) as AdminUser;
+
+  await supabase
+    .from("AdminPermissionGrant")
+    .insert(perms.map((permission) => ({ adminUserId: admin.id, permission })));
+
+  return NextResponse.json(
+    { subAdmin: shape({ ...admin, permissions: perms.map((permission) => ({ permission })) }) },
+    { status: 201 },
+  );
 }

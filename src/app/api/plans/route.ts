@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
 import { slotsForPrice, SOLO_MIN_DAILY } from "@/lib/pay-small-small";
 import { resolveDelivery } from "@/lib/delivery";
 import { hasActivePlanOfType, nextOrderReference } from "@/lib/server/lifecycle";
+import type { Order, Plan, Product } from "@/lib/db/types";
 
 const schema = z.object({
   productId: z.string(),
@@ -26,7 +27,12 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return jsonError(400, "Invalid plan details.");
   const { productId, perPayment, frequency, deliveryMethod, shipping } = parsed.data;
 
-  const product = await prisma.product.findFirst({ where: { id: productId, active: true } });
+  const { data: product } = await supabase
+    .from("Product")
+    .select("*")
+    .eq("id", productId)
+    .eq("active", true)
+    .maybeSingle<Product>();
   if (!product) return jsonError(404, "Product not found.");
   if (perPayment > product.price) return jsonError(400, "Your payment amount can't exceed the item price.");
 
@@ -35,9 +41,11 @@ export async function POST(req: NextRequest) {
   }
 
   const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, product.deliveryFee, shipping);
-  const order = await prisma.$transaction(async (tx) => {
-    const plan = await tx.plan.create({
-      data: {
+
+  const plan = unwrap(
+    await supabase
+      .from("Plan")
+      .insert({
         customerId: gate.customer.id,
         type: "solo",
         productId: product.id,
@@ -46,12 +54,17 @@ export async function POST(req: NextRequest) {
         slots: slotsForPrice(product.price),
         perPayment,
         frequency,
-        startDate: new Date(),
+        startDate: new Date().toISOString(),
         status: "active",
-      },
-    });
-    return tx.order.create({
-      data: {
+      })
+      .select("*")
+      .single(),
+  ) as Plan;
+
+  const order = unwrap(
+    await supabase
+      .from("Order")
+      .insert({
         reference: await nextOrderReference(),
         customerId: gate.customer.id,
         status: "in_plan",
@@ -63,22 +76,27 @@ export async function POST(req: NextRequest) {
         shipAddress: ship.address,
         shipCity: ship.city,
         shipState: ship.state,
-        shipLandmark: ship.landmark,
+        shipLandmark: ship.landmark ?? null,
         planId: plan.id,
-        items: {
-          create: {
-            productId: product.id,
-            name: product.name,
-            condition: product.condition,
-            price: product.price,
-            qty: 1,
-            image: product.images[0] ?? null,
-          },
-        },
-      },
-      include: { plan: true, items: true },
-    });
-  });
+      })
+      .select("*")
+      .single(),
+  ) as Order;
 
-  return NextResponse.json({ order }, { status: 201 });
+  const items = unwrap(
+    await supabase
+      .from("OrderItem")
+      .insert({
+        orderId: order.id,
+        productId: product.id,
+        name: product.name,
+        condition: product.condition,
+        price: product.price,
+        qty: 1,
+        image: product.images[0] ?? null,
+      })
+      .select("*"),
+  );
+
+  return NextResponse.json({ order: { ...order, plan, items } }, { status: 201 });
 }

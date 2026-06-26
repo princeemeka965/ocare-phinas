@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { hasPermission, type AdminAccount, type AdminPermission } from "@/lib/admin-access";
+import type { AdminPermissionGrant, Customer } from "@/lib/db/types";
 import { ADMIN_COOKIE, CUSTOMER_COOKIE, verifySession } from "./session";
 
 /* ------------------------------------------------------------------ *
@@ -22,7 +23,7 @@ async function sessionId(cookieName: string, kind: "customer" | "admin"): Promis
 export async function currentCustomer() {
   const id = await sessionId(CUSTOMER_COOKIE, "customer");
   if (!id) return null;
-  const customer = await prisma.customer.findUnique({ where: { id } });
+  const { data: customer } = await supabase.from("Customer").select("*").eq("id", id).maybeSingle<Customer>();
   if (!customer || customer.blocked) return null;
   return customer;
 }
@@ -39,7 +40,18 @@ export type CurrentAdmin = {
 export async function currentAdmin(): Promise<CurrentAdmin | null> {
   const id = await sessionId(ADMIN_COOKIE, "admin");
   if (!id) return null;
-  const admin = await prisma.adminUser.findUnique({ where: { id }, include: { permissions: true } });
+  const { data: admin } = await supabase
+    .from("AdminUser")
+    .select("*, permissions:AdminPermissionGrant(permission)")
+    .eq("id", id)
+    .maybeSingle<{
+      id: string;
+      name: string;
+      email: string;
+      role: "super" | "sub";
+      disabled: boolean;
+      permissions: Pick<AdminPermissionGrant, "permission">[];
+    }>();
   if (!admin || admin.disabled) return null;
   return {
     id: admin.id,

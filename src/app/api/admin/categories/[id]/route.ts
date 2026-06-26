@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { slugify } from "@/lib/slug";
 import { buildCategoryIcon } from "@/lib/server/category-icon";
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "A category name is required.");
 
-  const exists = await prisma.category.findUnique({ where: { id } });
+  const { data: exists } = await supabase.from("Category").select("id").eq("id", id).maybeSingle();
   if (!exists) return jsonError(404, "Category not found.");
 
   const data: { name?: string; slug?: string; image?: string; iconSvg?: string | null } = {};
@@ -43,7 +43,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     backgroundRemovalFailed = icon.backgroundRemovalFailed;
   }
 
-  const category = await prisma.category.update({ where: { id }, data });
+  const category = unwrap(await supabase.from("Category").update(data).eq("id", id).select("*").single());
   return NextResponse.json({ category, backgroundRemovalFailed });
 }
 
@@ -52,9 +52,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const products = await prisma.product.count({ where: { categoryId: id } });
+  const { count } = await supabase.from("Product").select("*", { count: "exact", head: true }).eq("categoryId", id);
+  const products = count ?? 0;
   if (products > 0) return jsonError(409, `This category has ${products} product(s). Reassign or remove them first.`);
 
-  await prisma.category.delete({ where: { id } });
+  await supabase.from("Category").delete().eq("id", id);
   return NextResponse.json({ ok: true });
 }

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { verifyPassword } from "@/lib/auth/password";
 import { signSession, sessionCookie, ADMIN_COOKIE } from "@/lib/auth/session";
 import { jsonError } from "@/lib/auth/guards";
 import type { AdminPermission } from "@/lib/admin-access";
+import type { AdminUser, AdminPermissionGrant } from "@/lib/db/types";
 
 const schema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
@@ -14,7 +15,11 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return jsonError(400, "Email and password are required.");
   const { email, password } = parsed.data;
 
-  const admin = await prisma.adminUser.findUnique({ where: { email }, include: { permissions: true } });
+  const { data: admin } = await supabase
+    .from("AdminUser")
+    .select("*, permissions:AdminPermissionGrant(permission)")
+    .eq("email", email)
+    .maybeSingle<AdminUser & { permissions: Pick<AdminPermissionGrant, "permission">[] }>();
   if (!admin || !(await verifyPassword(password, admin.passwordHash))) {
     return jsonError(401, "Invalid credentials.");
   }

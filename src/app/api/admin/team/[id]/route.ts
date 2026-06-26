@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { ASSIGNABLE_PERMISSIONS, type AdminPermission } from "@/lib/admin-access";
+import type { AdminUser, AdminPermissionGrant } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -28,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const target = await prisma.adminUser.findUnique({ where: { id } });
+  const { data: target } = await supabase.from("AdminUser").select("id,role").eq("id", id).maybeSingle<{ id: string; role: string }>();
   if (!target || target.role !== "sub") return jsonError(404, "Sub-admin not found.");
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
@@ -38,17 +39,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (permissions) {
     const perms = cleanPerms(permissions);
     if (!perms) return jsonError(400, "Invalid permission — \"team\" can't be granted to a sub-admin.");
-    await prisma.$transaction([
-      prisma.adminPermissionGrant.deleteMany({ where: { adminUserId: id } }),
-      prisma.adminPermissionGrant.createMany({ data: perms.map((permission) => ({ adminUserId: id, permission })) }),
-    ]);
+    // Replace the grant set (delete-then-insert; the unique constraint dedupes).
+    await supabase.from("AdminPermissionGrant").delete().eq("adminUserId", id);
+    await supabase.from("AdminPermissionGrant").insert(perms.map((permission) => ({ adminUserId: id, permission })));
   }
 
-  const admin = await prisma.adminUser.update({
-    where: { id },
-    data: { ...(name !== undefined ? { name } : {}), ...(disabled !== undefined ? { disabled } : {}) },
-    include: { permissions: true },
-  });
+  const admin = unwrap(
+    await supabase
+      .from("AdminUser")
+      .update({ ...(name !== undefined ? { name } : {}), ...(disabled !== undefined ? { disabled } : {}) })
+      .eq("id", id)
+      .select("*, permissions:AdminPermissionGrant(permission)")
+      .single(),
+  ) as AdminUser & { permissions: Pick<AdminPermissionGrant, "permission">[] };
   return NextResponse.json({
     subAdmin: {
       id: admin.id, name: admin.name, email: admin.email, disabled: admin.disabled,
@@ -64,9 +67,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const target = await prisma.adminUser.findUnique({ where: { id } });
+  const { data: target } = await supabase.from("AdminUser").select("id,role").eq("id", id).maybeSingle<{ id: string; role: string }>();
   if (!target || target.role !== "sub") return jsonError(404, "Sub-admin not found.");
 
-  await prisma.adminUser.delete({ where: { id } });
+  await supabase.from("AdminUser").delete().eq("id", id);
   return NextResponse.json({ ok: true });
 }

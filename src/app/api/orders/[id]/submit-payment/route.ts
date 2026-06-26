@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
+import type { Order } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,11 +13,13 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({ where: { id } });
+  const { data: order } = await supabase.from("Order").select("*").eq("id", id).maybeSingle<Order>();
   if (!order || order.customerId !== gate.customer.id) return jsonError(404, "Order not found.");
   if (order.paymentPlan !== "outright") return jsonError(400, "Plan payments are confirmed per period by staff.");
   if (order.status !== "pending_payment") return jsonError(409, "This order is no longer awaiting your payment.");
 
-  const updated = await prisma.order.update({ where: { id }, data: { status: "payment_submitted" } });
+  const updated = unwrap(
+    await supabase.from("Order").update({ status: "payment_submitted" }).eq("id", id).select("*").single(),
+  ) as Order;
   return NextResponse.json({ order: updated });
 }

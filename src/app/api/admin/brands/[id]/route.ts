@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { slugify } from "@/lib/slug";
 import { backgroundRemovedImage } from "@/lib/server/category-icon";
@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Invalid brand details.");
 
-  const exists = await prisma.brand.findUnique({ where: { id } });
+  const { data: exists } = await supabase.from("Brand").select("id").eq("id", id).maybeSingle();
   if (!exists) return jsonError(404, "Brand not found.");
 
   const { name, logo } = parsed.data;
@@ -34,13 +34,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     backgroundRemovalFailed = removed.backgroundRemovalFailed;
   }
 
-  const brand = await prisma.brand.update({
-    where: { id },
-    data: {
-      ...(name !== undefined ? { name, slug: slugify(name) } : {}),
-      ...(logoUpdate !== undefined ? { logo: logoUpdate } : {}),
-    },
-  });
+  const brand = unwrap(
+    await supabase
+      .from("Brand")
+      .update({
+        ...(name !== undefined ? { name, slug: slugify(name) } : {}),
+        ...(logoUpdate !== undefined ? { logo: logoUpdate } : {}),
+      })
+      .eq("id", id)
+      .select("*")
+      .single(),
+  );
   return NextResponse.json({ brand, backgroundRemovalFailed });
 }
 
@@ -49,9 +53,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const products = await prisma.product.count({ where: { brandId: id } });
+  const { count } = await supabase.from("Product").select("*", { count: "exact", head: true }).eq("brandId", id);
+  const products = count ?? 0;
   if (products > 0) return jsonError(409, `This brand has ${products} product(s). Reassign or remove them first.`);
 
-  await prisma.brand.delete({ where: { id } });
+  await supabase.from("Brand").delete().eq("id", id);
   return NextResponse.json({ ok: true });
 }

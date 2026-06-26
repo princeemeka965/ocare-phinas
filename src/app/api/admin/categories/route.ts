@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { slugify } from "@/lib/slug";
 import { buildCategoryIcon } from "@/lib/server/category-icon";
@@ -10,10 +10,10 @@ export async function GET() {
   const gate = await requireAdmin("categories");
   if ("response" in gate) return gate.response;
 
-  const categories = await prisma.category.findMany({
-    orderBy: { name: "asc" },
-    include: { _count: { select: { products: true } } },
-  });
+  const rows = unwrap(
+    await supabase.from("Category").select("*, products:Product(count)").order("name", { ascending: true }),
+  ) as (Record<string, unknown> & { products: { count: number }[] })[];
+  const categories = rows.map(({ products, ...c }) => ({ ...c, _count: { products: products[0]?.count ?? 0 } }));
   return NextResponse.json({ categories });
 }
 
@@ -30,14 +30,23 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "A category name is required.");
 
-  let slug = slugify(parsed.data.name);
-  for (let n = 2; await prisma.category.findUnique({ where: { slug } }); n++) slug = `${slugify(parsed.data.name)}-${n}`;
+  const base = slugify(parsed.data.name);
+  let slug = base;
+  for (let n = 2; ; n++) {
+    const { data: clash } = await supabase.from("Category").select("id").eq("slug", slug).maybeSingle();
+    if (!clash) break;
+    slug = `${base}-${n}`;
+  }
 
   const icon = parsed.data.image ? await buildCategoryIcon(parsed.data.image) : null;
 
-  const category = await prisma.category.create({
-    data: { name: parsed.data.name, slug, image: icon?.image, iconSvg: icon?.iconSvg ?? undefined },
-  });
+  const category = unwrap(
+    await supabase
+      .from("Category")
+      .insert({ name: parsed.data.name, slug, image: icon?.image ?? null, iconSvg: icon?.iconSvg ?? null })
+      .select("*")
+      .single(),
+  );
   return NextResponse.json(
     { category, backgroundRemovalFailed: icon?.backgroundRemovalFailed ?? false },
     { status: 201 },

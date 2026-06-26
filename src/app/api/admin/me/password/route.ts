@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
+import type { AdminUser } from "@/lib/db/types";
 
 const schema = z.object({
   currentPassword: z.string().min(1),
@@ -19,14 +20,18 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return jsonError(400, "Current password and a new password (8+ chars) are required.");
   const { currentPassword, newPassword } = parsed.data;
 
-  const admin = await prisma.adminUser.findUnique({ where: { id: gate.admin.id } });
+  const { data: admin } = await supabase
+    .from("AdminUser")
+    .select("*")
+    .eq("id", gate.admin.id)
+    .maybeSingle<AdminUser>();
   if (!admin || !(await verifyPassword(currentPassword, admin.passwordHash))) {
     return jsonError(400, "Your current password is incorrect.");
   }
 
-  await prisma.adminUser.update({
-    where: { id: admin.id },
-    data: { passwordHash: await hashPassword(newPassword), mustChangePassword: false },
-  });
+  await supabase
+    .from("AdminUser")
+    .update({ passwordHash: await hashPassword(newPassword), mustChangePassword: false })
+    .eq("id", admin.id);
   return NextResponse.json({ ok: true });
 }

@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
+import type { Order, OrderItem, Product } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
 // POST /api/admin/orders/:id/confirm — confirm an OUTRIGHT order's manual payment.
-// Decrements stock atomically (the only place store stock changes). Idempotent.
+// Decrements stock (the only place store stock changes). Idempotent.
 export async function POST(_req: NextRequest, { params }: Params) {
   const gate = await requireAdmin("orders");
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+  const { data: order } = await supabase
+    .from("Order")
+    .select("*, items:OrderItem(*)")
+    .eq("id", id)
+    .maybeSingle<Order & { items: OrderItem[] }>();
   if (!order) return jsonError(404, "Order not found.");
   if (order.paymentPlan !== "outright") return jsonError(400, "Plan orders are confirmed per period.");
 
@@ -22,20 +27,25 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
   if (order.status === "cancelled") return jsonError(409, "This order was cancelled.");
 
-  try {
-    const updated = await prisma.$transaction(async (tx) => {
-      for (const item of order.items) {
-        if (!item.productId) continue;
-        const product = await tx.product.findUnique({ where: { id: item.productId } });
-        if (!product || product.stockQuantity < item.qty) {
-          throw new Error(`Insufficient stock for "${item.name}".`);
-        }
-        await tx.product.update({ where: { id: product.id }, data: { stockQuantity: { decrement: item.qty } } });
-      }
-      return tx.order.update({ where: { id }, data: { status: "processing" } });
-    });
-    return NextResponse.json({ order: updated });
-  } catch (e) {
-    return jsonError(409, e instanceof Error ? e.message : "Could not confirm the order.");
+  // Validate all lines have stock BEFORE decrementing any, so a shortfall on a
+  // later item never leaves earlier items partially decremented.
+  const lines = order.items.filter((i) => i.productId);
+  for (const item of lines) {
+    const { data: product } = await supabase
+      .from("Product")
+      .select("id,stockQuantity")
+      .eq("id", item.productId!)
+      .maybeSingle<Pick<Product, "id" | "stockQuantity">>();
+    if (!product || product.stockQuantity < item.qty) {
+      return jsonError(409, `Insufficient stock for "${item.name}".`);
+    }
   }
+  for (const item of lines) {
+    await supabase.rpc("inc_product_stock", { p_id: item.productId!, delta: -item.qty });
+  }
+
+  const updated = unwrap(
+    await supabase.from("Order").update({ status: "processing" }).eq("id", id).select("*").single(),
+  ) as Order;
+  return NextResponse.json({ order: updated });
 }

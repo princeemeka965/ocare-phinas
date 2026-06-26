@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 
 type Params = { params: Promise<{ id: string }> };
@@ -11,10 +11,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: { category: { select: { id: true, name: true, slug: true } }, brand: { select: { id: true, name: true, slug: true } } },
-  });
+  const { data: product } = await supabase
+    .from("Product")
+    .select("*, category:Category(id,name,slug), brand:Brand(id,name,slug)")
+    .eq("id", id)
+    .maybeSingle();
   if (!product) return jsonError(404, "Product not found.");
   return NextResponse.json({ product });
 }
@@ -43,14 +44,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Invalid product details.");
 
-  const exists = await prisma.product.findUnique({ where: { id } });
+  const { data: exists } = await supabase.from("Product").select("id").eq("id", id).maybeSingle();
   if (!exists) return jsonError(404, "Product not found.");
 
   const { specs, ...rest } = parsed.data;
-  const product = await prisma.product.update({
-    where: { id },
-    data: { ...rest, ...(specs !== undefined ? { specs: specs ?? undefined } : {}) },
-  });
+  const product = unwrap(
+    await supabase
+      .from("Product")
+      .update({ ...rest, ...(specs !== undefined ? { specs: specs ?? null } : {}) })
+      .eq("id", id)
+      .select("*")
+      .single(),
+  );
   return NextResponse.json({ product });
 }
 
@@ -61,13 +66,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   // A product tied to plans or past orders can't be hard-deleted — deactivate it.
   const [plans, orderItems] = await Promise.all([
-    prisma.plan.count({ where: { productId: id } }),
-    prisma.orderItem.count({ where: { productId: id } }),
+    supabase.from("Plan").select("*", { count: "exact", head: true }).eq("productId", id),
+    supabase.from("OrderItem").select("*", { count: "exact", head: true }).eq("productId", id),
   ]);
-  if (plans > 0 || orderItems > 0) {
+  if ((plans.count ?? 0) > 0 || (orderItems.count ?? 0) > 0) {
     return jsonError(409, "This product is referenced by orders or plans. Deactivate it instead of deleting.");
   }
 
-  await prisma.product.delete({ where: { id } });
+  await supabase.from("Product").delete().eq("id", id);
   return NextResponse.json({ ok: true });
 }

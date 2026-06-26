@@ -2,13 +2,15 @@
  * Order & plan lifecycle — server-side business rules (payment-flow §10/§14) *
  * ------------------------------------------------------------------ *
  * Manual payments: stock, plan progress and order status only ever      *
- * change here, when an admin confirms. All money mutations run in a      *
- * transaction and are idempotent.                                       *
+ * change here, when an admin confirms. Idempotency is enforced by the    *
+ * unique (planId, periodIndex) constraint on PlanPayment; the atomic     *
+ * counter RPCs (inc_*) keep balance/stock/slot updates race-safe.        *
  * ------------------------------------------------------------------ */
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { planPeriods } from "@/lib/payment-health";
 import { ONGOING_PLAN_STATUSES } from "@/lib/pay-small-small";
+import type { Order, Plan, PlanPayment, Product, Wallet } from "@/lib/db/types";
 
 const NON_FINAL_PLAN = ONGOING_PLAN_STATUSES;
 
@@ -17,24 +19,31 @@ export async function nextOrderReference(): Promise<string> {
   const year = new Date().getFullYear();
   for (let i = 0; i < 10; i++) {
     const reference = `OCP-${year}-${Math.floor(10000 + Math.random() * 90000)}`;
-    if (!(await prisma.order.findUnique({ where: { reference } }))) return reference;
+    const { data } = await supabase.from("Order").select("id").eq("reference", reference).maybeSingle();
+    if (!data) return reference;
   }
   return `OCP-${year}-${Date.now()}`;
 }
 
 /** A unique group reference, e.g. G-017. */
 export async function nextGroupReference(): Promise<string> {
-  const count = await prisma.group.count();
-  for (let n = count + 1; ; n++) {
+  const { count } = await supabase.from("Group").select("*", { count: "exact", head: true });
+  for (let n = (count ?? 0) + 1; ; n++) {
     const reference = `G-${String(n).padStart(3, "0")}`;
-    if (!(await prisma.group.findUnique({ where: { reference } }))) return reference;
+    const { data } = await supabase.from("Group").select("id").eq("reference", reference).maybeSingle();
+    if (!data) return reference;
   }
 }
 
 /** Whether the customer already has a non-completed plan of this saving type (§1). */
 export async function hasActivePlanOfType(customerId: string, type: "solo" | "group"): Promise<boolean> {
-  const n = await prisma.plan.count({ where: { customerId, type, status: { in: [...NON_FINAL_PLAN] } } });
-  return n > 0;
+  const { count } = await supabase
+    .from("Plan")
+    .select("*", { count: "exact", head: true })
+    .eq("customerId", customerId)
+    .eq("type", type)
+    .in("status", [...NON_FINAL_PLAN]);
+  return (count ?? 0) > 0;
 }
 
 export type ConfirmResult =
@@ -49,92 +58,109 @@ export type ConfirmResult =
  * `awaiting_substitution` if the product sold out at the trigger (§7).
  */
 export async function confirmPlanPeriod(orderId: string, periodIndex: number, adminId: string): Promise<ConfirmResult> {
-  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { plan: true } });
+  const { data: order } = await supabase
+    .from("Order")
+    .select("*, plan:Plan(*)")
+    .eq("id", orderId)
+    .maybeSingle<Order & { plan: Plan | null }>();
   if (!order || !order.plan) return { ok: false, status: 404, error: "Plan order not found." };
   const plan = order.plan;
 
   // The schedule collects the product price plus any door-delivery fee; the
   // fulfilment triggers below still key off the product price (the goods value).
   const scheduleTotal = plan.productPrice + plan.deliveryFee;
-  const payments = await prisma.planPayment.findMany({ where: { planId: plan.id } });
+  const existing = unwrap(
+    await supabase.from("PlanPayment").select("*").eq("planId", plan.id),
+  ) as PlanPayment[];
   const periods = planPeriods({
     price: scheduleTotal,
     perPayment: plan.perPayment,
     frequency: plan.frequency,
-    startDate: plan.startDate.toISOString(),
-    paidIndices: payments.map((p) => p.periodIndex),
+    startDate: new Date(plan.startDate).toISOString(),
+    paidIndices: existing.map((p) => p.periodIndex),
   });
   const period = periods.find((p) => p.index === periodIndex);
   if (!period) return { ok: false, status: 400, error: "Invalid period." };
   if (period.status === "paid") return { ok: false, status: 409, error: "That period is already confirmed." };
   if (period.status === "upcoming") return { ok: false, status: 400, error: "No paying ahead — that period is not due yet." };
 
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.planPayment.create({
-      data: { planId: plan.id, periodIndex, amount: period.amount, dueDate: new Date(period.dueDate), confirmedById: adminId },
-    });
-
-    const agg = await tx.planPayment.aggregate({ where: { planId: plan.id }, _sum: { amount: true } });
-    const amountAllocated = agg._sum.amount ?? 0;
-
-    const wallet = await tx.wallet.findUnique({ where: { customerId: plan.customerId } });
-    if (wallet) {
-      await tx.transaction.createMany({
-        data: [
-          { walletId: wallet.id, type: "deposit", amount: period.amount, planId: plan.id, approved: true },
-          { walletId: wallet.id, type: "allocation", amount: period.amount, planId: plan.id, approved: true },
-        ],
-      });
-      await tx.wallet.update({ where: { id: wallet.id }, data: { totalBalance: { increment: period.amount } } });
-    }
-
-    let planStatus: string = plan.status;
-    let orderStatus: string = order.status;
-    let awaitingSubstitution = false;
-
-    // Goods are delivered at the fulfilment trigger — solo 50%, group 100% — of
-    // the product price (the delivery fee is finished off afterwards as balance).
-    const goodsTrigger = Math.round(plan.productPrice * (plan.type === "solo" ? 0.5 : 1));
-    const reached = amountAllocated >= goodsTrigger;
-
-    if (order.status === "in_plan" && reached) {
-      const product = plan.productId ? await tx.product.findUnique({ where: { id: plan.productId } }) : null;
-      if (product && product.stockQuantity <= 0) {
-        planStatus = "awaiting_substitution";
-        awaitingSubstitution = true;
-        await tx.notification.create({
-          data: {
-            customerId: plan.customerId, channel: "in_app", type: "out_of_stock_substitution", planId: plan.id,
-            body: `The ${product.name} you're saving toward is out of stock. Open the app to pick an alternate product — your money is safe.`,
-          },
-        });
-      } else {
-        orderStatus = "processing";
-        if (product) await tx.product.update({ where: { id: product.id }, data: { stockQuantity: { decrement: 1 } } });
-      }
-    }
-
-    if (!awaitingSubstitution) {
-      if (amountAllocated >= scheduleTotal) {
-        // Fully paid (product + delivery) — plan completes.
-        planStatus = "completed";
-        if (plan.type === "group" && plan.groupId) {
-          await tx.groupMembership.deleteMany({ where: { groupId: plan.groupId, customerId: plan.customerId } });
-          await tx.group.update({ where: { id: plan.groupId }, data: { slotsFilled: { decrement: plan.slots } } });
-        }
-      } else if (amountAllocated >= goodsTrigger) {
-        // Goods delivered; the remaining delivery fee is paid off as balance.
-        planStatus = "delivered";
-      }
-    }
-
-    await tx.plan.update({ where: { id: plan.id }, data: { amountAllocated, status: planStatus as never } });
-    if (orderStatus !== order.status) {
-      await tx.order.update({ where: { id: order.id }, data: { status: orderStatus as never } });
-    }
-
-    return { amountAllocated, planStatus, orderStatus, awaitingSubstitution };
+  // Record the period. The unique (planId, periodIndex) constraint makes this
+  // idempotent — a concurrent duplicate confirm fails here (code 23505).
+  const inserted = await supabase.from("PlanPayment").insert({
+    planId: plan.id,
+    periodIndex,
+    amount: period.amount,
+    dueDate: new Date(period.dueDate).toISOString(),
+    confirmedById: adminId,
   });
+  if (inserted.error) {
+    if (inserted.error.code === "23505") return { ok: false, status: 409, error: "That period is already confirmed." };
+    return { ok: false, status: 500, error: inserted.error.message };
+  }
 
-  return { ok: true, ...result, orderStatus: result.orderStatus };
+  const amountAllocated = existing.reduce((s, p) => s + p.amount, 0) + period.amount;
+
+  // Ledger: every confirmed period deposits and allocates the same amount.
+  const { data: wallet } = await supabase
+    .from("Wallet")
+    .select("*")
+    .eq("customerId", plan.customerId)
+    .maybeSingle<Wallet>();
+  if (wallet) {
+    await supabase.from("Transaction").insert([
+      { walletId: wallet.id, type: "deposit", amount: period.amount, planId: plan.id, approved: true },
+      { walletId: wallet.id, type: "allocation", amount: period.amount, planId: plan.id, approved: true },
+    ]);
+    await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: period.amount });
+  }
+
+  let planStatus: string = plan.status;
+  let orderStatus: string = order.status;
+  let awaitingSubstitution = false;
+
+  // Goods are delivered at the fulfilment trigger — solo 50%, group 100% — of
+  // the product price (the delivery fee is finished off afterwards as balance).
+  const goodsTrigger = Math.round(plan.productPrice * (plan.type === "solo" ? 0.5 : 1));
+  const reached = amountAllocated >= goodsTrigger;
+
+  if (order.status === "in_plan" && reached) {
+    const product = plan.productId
+      ? ((await supabase.from("Product").select("*").eq("id", plan.productId).maybeSingle<Product>()).data ?? null)
+      : null;
+    if (product && product.stockQuantity <= 0) {
+      planStatus = "awaiting_substitution";
+      awaitingSubstitution = true;
+      await supabase.from("Notification").insert({
+        customerId: plan.customerId,
+        channel: "in_app",
+        type: "out_of_stock_substitution",
+        planId: plan.id,
+        body: `The ${product.name} you're saving toward is out of stock. Open the app to pick an alternate product — your money is safe.`,
+      });
+    } else {
+      orderStatus = "processing";
+      if (product) await supabase.rpc("inc_product_stock", { p_id: product.id, delta: -1 });
+    }
+  }
+
+  if (!awaitingSubstitution) {
+    if (amountAllocated >= scheduleTotal) {
+      // Fully paid (product + delivery) — plan completes.
+      planStatus = "completed";
+      if (plan.type === "group" && plan.groupId) {
+        await supabase.from("GroupMembership").delete().eq("groupId", plan.groupId).eq("customerId", plan.customerId);
+        await supabase.rpc("inc_group_slots", { g_id: plan.groupId, delta: -plan.slots });
+      }
+    } else if (amountAllocated >= goodsTrigger) {
+      // Goods delivered; the remaining delivery fee is paid off as balance.
+      planStatus = "delivered";
+    }
+  }
+
+  await supabase.from("Plan").update({ amountAllocated, status: planStatus }).eq("id", plan.id);
+  if (orderStatus !== order.status) {
+    await supabase.from("Order").update({ status: orderStatus }).eq("id", order.id);
+  }
+
+  return { ok: true, amountAllocated, planStatus, orderStatus, awaitingSubstitution };
 }

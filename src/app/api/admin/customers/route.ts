@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/auth/guards";
 import { isArrears } from "@/lib/payment-health";
 import { planHealthFrom, PAYABLE_PLAN_STATUSES } from "@/lib/server/arrears";
+import { ilikePattern } from "@/lib/server/product-query";
+import type { Customer, Plan, PlanPayment, Wallet } from "@/lib/db/types";
+
+type CustomerRow = Customer & {
+  wallet: Wallet | null;
+  orders: { count: number }[];
+  plans: (Plan & { payments: PlanPayment[]; order: { reference: string } | { reference: string }[] | null })[];
+};
 
 // GET /api/admin/customers?q=
 export async function GET(req: NextRequest) {
@@ -12,29 +19,24 @@ export async function GET(req: NextRequest) {
   if ("response" in gate) return gate.response;
 
   const q = req.nextUrl.searchParams.get("q")?.trim();
-  const where: Prisma.CustomerWhereInput = q
-    ? {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { email: { contains: q, mode: "insensitive" } },
-          { phone: { contains: q, mode: "insensitive" } },
-        ],
-      }
-    : {};
+  let query = supabase
+    .from("Customer")
+    .select(
+      "*, wallet:Wallet(*), orders:Order(count), plans:Plan(*, payments:PlanPayment(*), order:Order(reference))",
+    )
+    .order("createdAt", { ascending: false });
+  if (q) {
+    const p = ilikePattern(q);
+    query = query.or(`name.ilike."${p}",email.ilike."${p}",phone.ilike."${p}"`);
+  }
 
-  const customers = await prisma.customer.findMany({
-    where,
-    include: {
-      wallet: true,
-      _count: { select: { orders: true } },
-      plans: { where: { status: { in: [...PAYABLE_PLAN_STATUSES] } }, include: { payments: true, order: { select: { reference: true } } } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const customers = unwrap(await query) as CustomerRow[];
 
   const shaped = customers.map((c) => {
+    // Only live (payable) plans can be in arrears.
+    const payablePlans = c.plans.filter((p) => (PAYABLE_PLAN_STATUSES as readonly string[]).includes(p.status));
     let worst: "overdue" | "missed" | null = null;
-    for (const plan of c.plans) {
+    for (const plan of payablePlans) {
       const h = planHealthFrom(plan, plan.payments);
       if (!isArrears(h.status)) continue;
       if (h.status === "overdue") { worst = "overdue"; break; }
@@ -48,9 +50,12 @@ export async function GET(req: NextRequest) {
       verified: c.phoneVerified,
       blocked: c.blocked,
       joined: c.createdAt,
-      orderCount: c._count.orders,
+      orderCount: c.orders[0]?.count ?? 0,
       walletBalance: c.wallet?.totalBalance ?? 0,
-      plans: c.plans.map((p) => ({ type: p.type, reference: p.order?.reference ?? null })),
+      plans: payablePlans.map((p) => {
+        const order = Array.isArray(p.order) ? (p.order[0] ?? null) : p.order;
+        return { type: p.type, reference: order?.reference ?? null };
+      }),
       arrears: worst,
     };
   });

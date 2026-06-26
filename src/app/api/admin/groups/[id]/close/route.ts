@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
+import type { Group } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -11,9 +12,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const group = await prisma.group.findUnique({ where: { id } });
+  const { data: group } = await supabase.from("Group").select("id").eq("id", id).maybeSingle();
   if (!group) return jsonError(404, "Group not found.");
 
-  const updated = await prisma.group.update({ where: { id }, data: { status: "closed" } });
+  const updated = unwrap(
+    await supabase.from("Group").update({ status: "closed" }).eq("id", id).select("*").single(),
+  ) as Group;
   return NextResponse.json({ group: updated });
 }

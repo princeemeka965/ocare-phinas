@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 
 // Public — open groups a customer can join.
 export async function GET() {
-  const groups = await prisma.group.findMany({
-    where: { status: "open" },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, reference: true, name: true, totalSlots: true, slotsFilled: true, cycleLengthDays: true },
-  });
+  const groups = unwrap(
+    await supabase
+      .from("Group")
+      .select("id,reference,name,totalSlots,slotsFilled,cycleLengthDays")
+      .eq("status", "open")
+      .order("createdAt", { ascending: false }),
+  ) as { id: string; reference: string; name: string; totalSlots: number; slotsFilled: number; cycleLengthDays: number }[];
   return NextResponse.json({
     groups: groups.map((g) => ({ ...g, slotsAvailable: g.totalSlots - g.slotsFilled })),
   });

@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 
 // Public — categories for the storefront nav / filters.
 export async function GET() {
-  const categories = await prisma.category.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, slug: true, image: true, iconSvg: true },
-  });
+  const categories = unwrap(
+    await supabase.from("Category").select("id,name,slug,image,iconSvg").order("name", { ascending: true }),
+  );
   return NextResponse.json({ categories });
 }

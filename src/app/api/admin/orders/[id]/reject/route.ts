@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
+import type { Order } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -11,12 +12,14 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({ where: { id } });
+  const { data: order } = await supabase.from("Order").select("*").eq("id", id).maybeSingle<Order>();
   if (!order) return jsonError(404, "Order not found.");
   if (!["pending_payment", "payment_submitted"].includes(order.status)) {
     return jsonError(409, "Only an order awaiting confirmation can be rejected.");
   }
 
-  const updated = await prisma.order.update({ where: { id }, data: { status: "cancelled" } });
+  const updated = unwrap(
+    await supabase.from("Order").update({ status: "cancelled" }).eq("id", id).select("*").single(),
+  ) as Order;
   return NextResponse.json({ order: updated });
 }

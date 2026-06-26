@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { jsonError } from "@/lib/auth/guards";
+import type { Product } from "@/lib/db/types";
 
 const schema = z.object({
   items: z
@@ -27,9 +28,9 @@ export async function POST(req: NextRequest) {
   const validated = await Promise.all(
     parsed.data.items.map(async (item) => {
       const product = item.id
-        ? await prisma.product.findUnique({ where: { id: item.id } })
+        ? (await supabase.from("Product").select("*").eq("id", item.id).maybeSingle<Product>()).data
         : item.slug
-          ? await prisma.product.findUnique({ where: { slug: item.slug } })
+          ? (await supabase.from("Product").select("*").eq("slug", item.slug).maybeSingle<Product>()).data
           : null;
 
       if (!product || !product.active) {

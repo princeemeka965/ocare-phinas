@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { naira } from "@/lib/pay-small-small";
 import { plansInArrears } from "@/lib/server/arrears";
 
@@ -28,10 +28,14 @@ export async function POST(req: NextRequest) {
   let notified = 0;
   for (const { plan, health } of rows) {
     const type = health.status === "overdue" ? "payment_overdue" : "payment_missed";
-    const already = await prisma.notification.count({
-      where: { customerId: plan.customerId, planId: plan.id, type, createdAt: { gte: startOfDay } },
-    });
-    if (already > 0) continue;
+    const { count: already } = await supabase
+      .from("Notification")
+      .select("*", { count: "exact", head: true })
+      .eq("customerId", plan.customerId)
+      .eq("planId", plan.id)
+      .eq("type", type)
+      .gte("createdAt", startOfDay.toISOString());
+    if ((already ?? 0) > 0) continue;
 
     const product = plan.product?.name ?? "your plan";
     const body =
@@ -39,12 +43,10 @@ export async function POST(req: NextRequest) {
         ? `OCare Phinas: ${naira(health.arrears)} on ${product} is overdue. Please clear it to keep your account in good standing.`
         : `OCare Phinas: you're ${naira(health.arrears)} behind on ${product}. Catch up to stay on track.`;
 
-    await prisma.notification.createMany({
-      data: [
-        { customerId: plan.customerId, planId: plan.id, type, channel: "in_app", body },
-        { customerId: plan.customerId, planId: plan.id, type, channel: "sms", body },
-      ],
-    });
+    await supabase.from("Notification").insert([
+      { customerId: plan.customerId, planId: plan.id, type, channel: "in_app", body },
+      { customerId: plan.customerId, planId: plan.id, type, channel: "sms", body },
+    ]);
     notified++;
   }
 

@@ -4,9 +4,9 @@
  * arrears, and the daily recompute job.                                  *
  * ------------------------------------------------------------------ */
 
-import type { Plan, PlanPayment } from "@prisma/client";
+import type { Plan, PlanPayment } from "@/lib/db/types";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { paymentHealth, isArrears, type PaymentHealth } from "@/lib/payment-health";
 
 /** Statuses that are still on a live payment schedule (can fall into arrears). */
@@ -20,7 +20,7 @@ export function planHealthFrom(plan: Plan, payments: Pick<PlanPayment, "amount">
     amountPaid,
     perPayment: plan.perPayment,
     frequency: plan.frequency,
-    startDate: plan.startDate.toISOString(),
+    startDate: new Date(plan.startDate).toISOString(),
   });
 }
 
@@ -32,15 +32,26 @@ export type ArrearsRow = {
 
 /** Every plan currently missed or overdue, overdue first then by amount owed. */
 export async function plansInArrears(): Promise<ArrearsRow[]> {
-  const plans = await prisma.plan.findMany({
-    where: { status: { in: [...PAYABLE_PLAN_STATUSES] } },
-    include: {
-      payments: true,
-      product: { select: { name: true } },
-      order: { select: { reference: true } },
-      customer: { select: { id: true, name: true, email: true, phone: true } },
-    },
-  });
+  const rows = unwrap(
+    await supabase
+      .from("Plan")
+      .select(
+        "*, payments:PlanPayment(*), product:Product(name), order:Order(reference), customer:Customer(id,name,email,phone)",
+      )
+      .in("status", [...PAYABLE_PLAN_STATUSES]),
+  ) as (Plan & {
+    payments: PlanPayment[];
+    product: { name: string } | null;
+    order: { reference: string } | { reference: string }[] | null;
+    customer: { id: string; name: string; email: string; phone: string };
+  })[];
+
+  const plans = rows.map((r) => ({
+    ...r,
+    // A unique FK (Order.planId) is a to-one relation; normalise if it comes
+    // back as a single-element array.
+    order: Array.isArray(r.order) ? (r.order[0] ?? null) : r.order,
+  }));
 
   return plans
     .map((plan) => ({ plan, customer: plan.customer, health: planHealthFrom(plan, plan.payments) }))

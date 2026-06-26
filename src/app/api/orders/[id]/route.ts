@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
+import type { Order } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -11,7 +12,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({ where: { id }, include: { items: true, plan: true } });
+  const { data: order } = await supabase
+    .from("Order")
+    .select("*, items:OrderItem(*), plan:Plan(*)")
+    .eq("id", id)
+    .maybeSingle<Order & { customerId: string }>();
   if (!order || order.customerId !== gate.customer.id) return jsonError(404, "Order not found.");
   return NextResponse.json({ order });
 }

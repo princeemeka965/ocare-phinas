@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { getSettings } from "@/lib/settings";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 
@@ -33,6 +33,8 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return jsonError(400, "Invalid settings values.");
 
   await getSettings(); // ensure the row exists
-  const settings = await prisma.settings.update({ where: { id: "singleton" }, data: parsed.data });
+  const settings = unwrap(
+    await supabase.from("Settings").update(parsed.data).eq("id", "singleton").select("*").single(),
+  );
   return NextResponse.json({ settings });
 }

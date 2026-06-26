@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
+import { ilikePattern, nameOrClause } from "@/lib/server/product-query";
 
 // GET /api/search/suggest?q=
 // Powers the header search dropdown: a few matching products plus the
@@ -13,36 +13,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ products: [], categories: [], brands: [] });
   }
 
-  const contains = { contains: q, mode: "insensitive" } as const;
-  const productWhere: Prisma.ProductWhereInput = {
-    active: true,
-    OR: [
-      { name: contains },
-      { brand: { is: { name: contains } } },
-      { category: { is: { name: contains } } },
-    ],
-  };
-
+  const pattern = ilikePattern(q);
   const [products, categories, brands] = await Promise.all([
-    prisma.product.findMany({
-      where: productWhere,
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      select: { id: true, name: true, slug: true, price: true, images: true },
-    }),
-    prisma.category.findMany({
-      where: { name: contains },
-      orderBy: { name: "asc" },
-      take: 4,
-      select: { id: true, name: true, slug: true },
-    }),
-    prisma.brand.findMany({
-      where: { name: contains },
-      orderBy: { name: "asc" },
-      take: 4,
-      select: { id: true, name: true, slug: true },
-    }),
+    supabase
+      .from("ProductCard")
+      .select("id,name,slug,price,images")
+      .eq("active", true)
+      .or(nameOrClause(q))
+      .order("createdAt", { ascending: false })
+      .limit(6),
+    supabase
+      .from("Category")
+      .select("id,name,slug")
+      .ilike("name", pattern)
+      .order("name", { ascending: true })
+      .limit(4),
+    supabase
+      .from("Brand")
+      .select("id,name,slug")
+      .ilike("name", pattern)
+      .order("name", { ascending: true })
+      .limit(4),
   ]);
 
-  return NextResponse.json({ products, categories, brands });
+  return NextResponse.json({
+    products: unwrap(products),
+    categories: unwrap(categories),
+    brands: unwrap(brands),
+  });
 }

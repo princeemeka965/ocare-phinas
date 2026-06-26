@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { hashOtp } from "@/lib/auth/password";
 import { jsonError } from "@/lib/auth/guards";
 
@@ -15,12 +15,10 @@ export async function POST(req: NextRequest) {
   const { phone } = parsed.data;
 
   const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
-  await prisma.otpCode.create({
-    data: {
-      phone,
-      codeHash: await hashOtp(code),
-      expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000),
-    },
+  await supabase.from("OtpCode").insert({
+    phone,
+    codeHash: await hashOtp(code),
+    expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString(),
   });
 
   // Phase 3: send `code` via the SMS provider configured in Settings.

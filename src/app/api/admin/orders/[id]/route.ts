@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { planPeriods, paymentHealth } from "@/lib/payment-health";
+import type { Order, Plan, PlanPayment } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,14 +14,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if ("response" in gate) return gate.response;
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: {
-      customer: { select: { name: true, email: true, phone: true } },
-      items: true,
-      plan: { include: { payments: true } },
-    },
-  });
+  const { data: order } = await supabase
+    .from("Order")
+    .select("*, customer:Customer(name,email,phone), items:OrderItem(*), plan:Plan(*, payments:PlanPayment(*))")
+    .eq("id", id)
+    .maybeSingle<Order & { plan: (Plan & { payments: PlanPayment[] }) | null }>();
   if (!order) return jsonError(404, "Order not found.");
 
   let periods = null;
@@ -30,14 +28,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const paidIndices = p.payments.map((pp) => pp.periodIndex);
     // Schedule collects the product price plus any door-delivery fee.
     const scheduleTotal = p.productPrice + p.deliveryFee;
+    const startDate = new Date(p.startDate).toISOString();
     periods = planPeriods({
       price: scheduleTotal, perPayment: p.perPayment, frequency: p.frequency,
-      startDate: p.startDate.toISOString(), paidIndices,
+      startDate, paidIndices,
     });
     const amountPaid = p.payments.reduce((s, pp) => s + pp.amount, 0);
     health = paymentHealth({
       price: scheduleTotal, amountPaid, perPayment: p.perPayment, frequency: p.frequency,
-      startDate: p.startDate.toISOString(),
+      startDate,
     });
   }
 

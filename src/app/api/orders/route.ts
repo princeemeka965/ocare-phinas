@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { prisma } from "@/lib/prisma";
+import { supabase, unwrap } from "@/lib/supabase";
 import { requireCustomer, jsonError } from "@/lib/auth/guards";
 import { resolveDelivery } from "@/lib/delivery";
 import { nextOrderReference } from "@/lib/server/lifecycle";
+import type { Order, Product } from "@/lib/db/types";
 
 // GET /api/orders — the signed-in customer's orders.
 export async function GET() {
   const gate = await requireCustomer();
   if ("response" in gate) return gate.response;
 
-  const orders = await prisma.order.findMany({
-    where: { customerId: gate.customer.id },
-    include: { items: true, plan: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const orders = unwrap(
+    await supabase
+      .from("Order")
+      .select("*, items:OrderItem(*), plan:Plan(*)")
+      .eq("customerId", gate.customer.id)
+      .order("createdAt", { ascending: false }),
+  );
   return NextResponse.json({ orders });
 }
 
@@ -39,10 +42,12 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return jsonError(400, "Invalid order — items and shipping are required.");
   const { items, deliveryMethod, shipping } = parsed.data;
 
-  const products = await prisma.product.findMany({
-    where: { id: { in: items.map((i) => i.id) } },
-    include: { brand: { select: { name: true } } },
-  });
+  const products = unwrap(
+    await supabase
+      .from("Product")
+      .select("*, brand:Brand(name)")
+      .in("id", items.map((i) => i.id)),
+  ) as (Product & { brand: { name: string } | { name: string }[] | null })[];
   const byId = new Map(products.map((p) => [p.id, p]));
 
   const lines = items.map((i) => ({ item: i, product: byId.get(i.id) }));
@@ -51,39 +56,52 @@ export async function POST(req: NextRequest) {
     return jsonError(409, `"${problem.product?.name ?? "An item"}" is unavailable or out of stock. Update your cart.`);
   }
 
+  const brandName = (p: Product & { brand: { name: string } | { name: string }[] | null }) =>
+    Array.isArray(p.brand) ? (p.brand[0]?.name ?? null) : (p.brand?.name ?? null);
+
   const subtotal = lines.reduce((s, l) => s + l.product!.price * l.item.qty, 0);
   /* Delivery fee is flat per product — charged once per line, never × qty. */
   const cartFee = lines.reduce((s, l) => s + l.product!.deliveryFee, 0);
   const { deliveryFee, shipping: ship } = resolveDelivery(deliveryMethod, cartFee, shipping);
 
-  const order = await prisma.order.create({
-    data: {
-      reference: await nextOrderReference(),
-      customerId: gate.customer.id,
-      status: "pending_payment",
-      paymentPlan: "outright",
-      deliveryMethod,
-      subtotal,
-      deliveryFee,
-      total: subtotal + deliveryFee,
-      shipAddress: ship.address,
-      shipCity: ship.city,
-      shipState: ship.state,
-      shipLandmark: ship.landmark,
-      items: {
-        create: lines.map((l) => ({
+  const order = unwrap(
+    await supabase
+      .from("Order")
+      .insert({
+        reference: await nextOrderReference(),
+        customerId: gate.customer.id,
+        status: "pending_payment",
+        paymentPlan: "outright",
+        deliveryMethod,
+        subtotal,
+        deliveryFee,
+        total: subtotal + deliveryFee,
+        shipAddress: ship.address,
+        shipCity: ship.city,
+        shipState: ship.state,
+        shipLandmark: ship.landmark ?? null,
+      })
+      .select("*")
+      .single(),
+  ) as Order;
+
+  const items_ = unwrap(
+    await supabase
+      .from("OrderItem")
+      .insert(
+        lines.map((l) => ({
+          orderId: order.id,
           productId: l.product!.id,
           name: l.product!.name,
-          brand: l.product!.brand?.name,
+          brand: brandName(l.product!),
           condition: l.product!.condition,
           price: l.product!.price,
           qty: l.item.qty,
           image: l.product!.images[0] ?? null,
         })),
-      },
-    },
-    include: { items: true },
-  });
+      )
+      .select("*"),
+  );
 
-  return NextResponse.json({ order }, { status: 201 });
+  return NextResponse.json({ order: { ...order, items: items_ } }, { status: 201 });
 }
