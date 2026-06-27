@@ -10,9 +10,15 @@ export async function GET() {
   const gate = await requireAdmin("categories");
   if ("response" in gate) return gate.response;
 
-  const rows = unwrap(
-    await supabase.from("Brand").select("*, products:Product(count)").order("name", { ascending: true }),
-  ) as (Record<string, unknown> & { products: { count: number }[] })[];
+  const res = await supabase
+    .from("Brand")
+    .select("*, products:Product(count)")
+    .order("name", { ascending: true });
+  if (res.error) {
+    console.error("[admin/brands GET] supabase error:", res.error);
+    return jsonError(500, process.env.NODE_ENV !== "production" ? res.error.message : "Could not load brands.");
+  }
+  const rows = res.data as (Record<string, unknown> & { products: { count: number }[] })[];
   const brands = rows.map(({ products, ...b }) => ({ ...b, _count: { products: products[0]?.count ?? 0 } }));
   return NextResponse.json({ brands });
 }

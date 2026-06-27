@@ -4,7 +4,6 @@
  * SVG that renders in the header strip like the curated Lucide icons.  *
  * ------------------------------------------------------------------ */
 
-import sharp from "sharp";
 import { trace, type PotraceOptions } from "potrace";
 
 /**
@@ -74,6 +73,9 @@ function normalizeSvg(raw: string): string | null {
 
 /** Convert image bytes into a black-silhouette-on-white PNG for tracing. */
 async function toSilhouettePng(bytes: Buffer): Promise<Buffer> {
+  // Imported lazily so this module can load on runtimes where the native sharp
+  // binary is unavailable — only the image-processing paths actually need it.
+  const sharp = (await import("sharp")).default;
   return sharp(bytes)
     .ensureAlpha()
     .resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true })
