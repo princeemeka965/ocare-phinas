@@ -3,6 +3,8 @@ import { Phone, MessageCircle, ExternalLink } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Logo } from "@/components/storefront/logo";
+import { getSettings } from "@/lib/settings";
+import { telHref, waHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 const quickLinks = [
   { label: "About Us", href: "/about" },
@@ -29,7 +31,8 @@ const pssLinks = [
 ];
 
 
-export function StorefrontFooter() {
+export async function StorefrontFooter() {
+  const { whatsappNumber } = await getSettings();
   return (
     <footer className="border-t border-border bg-card mt-auto" aria-label="Site footer">
       <Container>
@@ -44,15 +47,15 @@ export function StorefrontFooter() {
             </p>
             <div className="flex flex-col gap-2">
               <a
-                href="tel:+2347069640753"
+                href={telHref(whatsappNumber)}
                 className="inline-flex items-center gap-2 text-caption text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Phone className="size-3.5 shrink-0" />
-                <span>+234 706 964 0753</span>
+                <span>{formatPhoneDisplay(whatsappNumber)}</span>
               </a>
-              {/* Payment WhatsApp — from Settings in Phase 3 */}
+              {/* Payment WhatsApp — from admin Settings (Settings.whatsappNumber) */}
               <a
-                href="https://wa.me/2347069640753"
+                href={waHref(whatsappNumber)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#25D366] px-3 py-1.5 text-caption font-medium text-white hover:bg-[#1eb85a] transition-colors"

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { LegalPage, type LegalSection } from "@/components/storefront/legal-page";
+import { getSettings } from "@/lib/settings";
+import { telHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Solo Plan Terms & Conditions — OCare Phinas Integrated Services",
@@ -8,7 +10,8 @@ export const metadata: Metadata = {
     "The terms governing the Ocare Phinas Solo Plan — a flexible savings and payment plan that lets you save daily, weekly, or monthly towards a product.",
 };
 
-const sections: LegalSection[] = [
+function buildSections(phone: string): LegalSection[] {
+  return [
   {
     id: "introduction",
     heading: "Introduction",
@@ -243,7 +246,7 @@ const sections: LegalSection[] = [
         <p>
           <strong>Ocare Phinas Integrated Services</strong>
           <br />
-          Phone: <a href="tel:+2347069640753">07069640753</a>
+          Phone: <a href={telHref(phone)}>{formatPhoneDisplay(phone)}</a>
         </p>
         <p>
           By participating in the Solo Plan, you confirm that you have read, understood, and agreed to
@@ -252,16 +255,18 @@ const sections: LegalSection[] = [
       </>
     ),
   },
-];
+  ];
+}
 
-export default function SoloPlanTermsPage() {
+export default async function SoloPlanTermsPage() {
+  const { whatsappNumber } = await getSettings();
   return (
     <LegalPage
       title="Solo Plan Terms & Conditions"
       breadcrumb="Solo Plan Terms"
       intro="The Ocare Phinas Solo Plan lets you save towards a product at your own pace — daily, weekly, or monthly. These terms govern how the plan works."
       lastUpdated="June 2026"
-      sections={sections}
+      sections={buildSections(whatsappNumber)}
     />
   );
 }

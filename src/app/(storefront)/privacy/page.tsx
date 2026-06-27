@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { LegalPage, type LegalSection } from "@/components/storefront/legal-page";
+import { getSettings } from "@/lib/settings";
+import { telHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — OCare Phinas Integrated Services",
@@ -8,7 +10,8 @@ export const metadata: Metadata = {
     "How Ocare Phinas Integrated Services collects, uses, protects, and shares your personal information.",
 };
 
-const sections: LegalSection[] = [
+function buildSections(phone: string): LegalSection[] {
+  return [
   {
     id: "introduction",
     heading: "Introduction",
@@ -196,21 +199,23 @@ const sections: LegalSection[] = [
         <p>
           <strong>Ocare Phinas Integrated Services</strong>
           <br />
-          Phone: <a href="tel:+2347069640753">07069640753</a>
+          Phone: <a href={telHref(phone)}>{formatPhoneDisplay(phone)}</a>
         </p>
       </>
     ),
   },
-];
+  ];
+}
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const { whatsappNumber } = await getSettings();
   return (
     <LegalPage
       title="Privacy Policy"
       breadcrumb="Privacy Policy"
       intro="Ocare Phinas Integrated Services values your privacy. This policy describes the information we collect, how we use it, and our refund, cancellation, and savings plan terms."
       lastUpdated="4 June 2026"
-      sections={sections}
+      sections={buildSections(whatsappNumber)}
     />
   );
 }

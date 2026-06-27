@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { LegalPage, type LegalSection } from "@/components/storefront/legal-page";
+import { getSettings } from "@/lib/settings";
+import { telHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Terms & Conditions — OCare Phinas Integrated Services",
@@ -8,7 +10,8 @@ export const metadata: Metadata = {
     "The terms governing your use of Ocare Phinas Integrated Services, including orders, payments, contribution plans, and deliveries.",
 };
 
-const sections: LegalSection[] = [
+function buildSections(phone: string): LegalSection[] {
+  return [
   {
     id: "introduction",
     heading: "Introduction",
@@ -168,22 +171,24 @@ const sections: LegalSection[] = [
         <p>
           <strong>Ocare Phinas Integrated Services</strong>
           <br />
-          Phone: <a href="tel:07069640753">07069640753</a>
+          Phone: <a href={telHref(phone)}>{formatPhoneDisplay(phone)}</a>
         </p>
         <p>For questions regarding these Terms, please contact customer support.</p>
       </>
     ),
   },
-];
+  ];
+}
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const { whatsappNumber } = await getSettings();
   return (
     <LegalPage
       title="Terms & Conditions"
       breadcrumb="Terms & Conditions"
       intro="Please read these Terms and Conditions carefully. They govern your use of Ocare Phinas Integrated Services, including accounts, orders, payments, savings plans, and deliveries."
       lastUpdated="4 June 2026"
-      sections={sections}
+      sections={buildSections(whatsappNumber)}
     />
   );
 }

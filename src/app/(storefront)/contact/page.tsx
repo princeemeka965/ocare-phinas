@@ -12,6 +12,8 @@ import {
 
 import { Container } from "@/components/layout/container";
 import { ContactForm } from "@/components/storefront/contact-form";
+import { getSettings } from "@/lib/settings";
+import { telHref, waHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Contact Us — OCare Phinas Integrated Services",
@@ -23,30 +25,33 @@ export const metadata: Metadata = {
   },
 };
 
-const CHANNELS = [
-  {
-    icon: Phone,
-    label: "Call us",
-    value: "+234 000 000 0000",
-    href: "tel:+2340000000000",
-    note: "Mon–Sat, business hours",
-  },
-  {
-    icon: MessageCircle,
-    label: "WhatsApp",
-    value: "Chat with us",
-    href: "https://wa.me/2340000000000",
-    note: "Fastest way to reach us",
-    external: true,
-  },
-  {
-    icon: Mail,
-    label: "Email",
-    value: "support@ocarephinas.com",
-    href: "mailto:support@ocarephinas.com",
-    note: "We reply within 24 hours",
-  },
-];
+/** Contact channels — phone + WhatsApp come from admin Settings (whatsappNumber). */
+function buildChannels(whatsappNumber: string) {
+  return [
+    {
+      icon: Phone,
+      label: "Call us",
+      value: formatPhoneDisplay(whatsappNumber),
+      href: telHref(whatsappNumber),
+      note: "Mon–Sat, business hours",
+    },
+    {
+      icon: MessageCircle,
+      label: "WhatsApp",
+      value: "Chat with us",
+      href: waHref(whatsappNumber),
+      note: "Fastest way to reach us",
+      external: true,
+    },
+    {
+      icon: Mail,
+      label: "Email",
+      value: "support@ocarephinas.com",
+      href: "mailto:support@ocarephinas.com",
+      note: "We reply within 24 hours",
+    },
+  ];
+}
 
 const HOURS = [
   { day: "Monday – Friday", time: "8:00 AM – 6:00 PM" },
@@ -54,7 +59,9 @@ const HOURS = [
   { day: "Sunday & Public Holidays", time: "Closed" },
 ];
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const { whatsappNumber } = await getSettings();
+  const CHANNELS = buildChannels(whatsappNumber);
   return (
     <div>
       {/* Hero */}

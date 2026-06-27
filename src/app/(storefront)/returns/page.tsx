@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { LegalPage, type LegalSection } from "@/components/storefront/legal-page";
+import { getSettings } from "@/lib/settings";
+import { telHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Returns & Refunds Policy — OCare Phinas Integrated Services",
@@ -9,7 +11,8 @@ export const metadata: Metadata = {
     "How returns, replacements and refunds work at Ocare Phinas Integrated Services — the 7-day return window, eligible items, how to start a return, and refund timelines.",
 };
 
-const sections: LegalSection[] = [
+function buildSections(phone: string): LegalSection[] {
+  return [
   {
     id: "return-window",
     heading: "Return Window",
@@ -184,21 +187,23 @@ const sections: LegalSection[] = [
         <p>
           <strong>Ocare Phinas Integrated Services</strong>
           <br />
-          Phone: <a href="tel:+2347069640753">0706 964 0753</a>
+          Phone: <a href={telHref(phone)}>{formatPhoneDisplay(phone)}</a>
         </p>
       </>
     ),
   },
-];
+  ];
+}
 
-export default function ReturnsPolicyPage() {
+export default async function ReturnsPolicyPage() {
+  const { whatsappNumber } = await getSettings();
   return (
     <LegalPage
       title="Returns & Refunds Policy"
       breadcrumb="Returns & Refunds"
       intro="This policy explains when products purchased from Ocare Phinas Integrated Services can be returned, how to start a return, and how replacements and refunds are handled. It works alongside our Product Warranty Policy and Delivery & Shipping Policy."
       lastUpdated="June 2026"
-      sections={sections}
+      sections={buildSections(whatsappNumber)}
     />
   );
 }

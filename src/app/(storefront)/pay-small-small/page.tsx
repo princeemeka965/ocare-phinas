@@ -5,6 +5,8 @@ import { Users, User, CheckCircle, HelpCircle, Wallet, Sparkles } from "lucide-r
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getSettings } from "@/lib/settings";
+import { waHref } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Pay Small Small — OCare Phinas",
@@ -45,7 +47,8 @@ const FAQS = [
   },
 ];
 
-export default function PSSLandingPage() {
+export default async function PSSLandingPage() {
+  const { whatsappNumber } = await getSettings();
   return (
     <div>
       {/* Hero */}
@@ -205,7 +208,7 @@ export default function PSSLandingPage() {
           <div className="text-center mt-10">
             <p className="text-body-sm text-muted-foreground mb-4">Still have questions?</p>
             <a
-              href="https://wa.me/2340000000000"
+              href={waHref(whatsappNumber)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-xl bg-[#25D366] px-5 py-2.5 text-body-sm font-semibold text-white hover:bg-[#1eb85a] transition-colors"

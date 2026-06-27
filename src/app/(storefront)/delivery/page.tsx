@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { LegalPage, type LegalSection } from "@/components/storefront/legal-page";
+import { getSettings } from "@/lib/settings";
+import { telHref, formatPhoneDisplay } from "@/lib/whatsapp";
 
 export const metadata: Metadata = {
   title: "Delivery & Shipping Policy — OCare Phinas Integrated Services",
@@ -8,7 +10,8 @@ export const metadata: Metadata = {
     "How Ocare Phinas Integrated Services processes and delivers orders across Nigeria — doorstep delivery within Lagos, waybill services to other states, shipping charges and delivery timelines.",
 };
 
-const sections: LegalSection[] = [
+function buildSections(phone: string): LegalSection[] {
+  return [
   {
     id: "delivery-coverage",
     heading: "Delivery Coverage",
@@ -204,7 +207,7 @@ const sections: LegalSection[] = [
         <p>
           <strong>Ocare Phinas Integrated Services</strong>
           <br />
-          Phone: <a href="tel:+2347069640753">0706 964 0753</a>
+          Phone: <a href={telHref(phone)}>{formatPhoneDisplay(phone)}</a>
         </p>
         <p>
           We remain committed to ensuring a smooth and reliable delivery experience for all
@@ -213,16 +216,18 @@ const sections: LegalSection[] = [
       </>
     ),
   },
-];
+  ];
+}
 
-export default function DeliveryPolicyPage() {
+export default async function DeliveryPolicyPage() {
+  const { whatsappNumber } = await getSettings();
   return (
     <LegalPage
       title="Delivery & Shipping Policy"
       breadcrumb="Delivery & Shipping"
       intro="At Ocare Phinas Integrated Services, we are committed to ensuring that all orders are delivered safely, efficiently, and in a timely manner. This Delivery and Shipping Policy explains how orders are processed and delivered to customers."
       lastUpdated="June 2026"
-      sections={sections}
+      sections={buildSections(whatsappNumber)}
     />
   );
 }
