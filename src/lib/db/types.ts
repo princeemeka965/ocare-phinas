@@ -42,6 +42,7 @@ export interface Customer {
   phone: string;
   passwordHash: string;
   phoneVerified: boolean;
+  emailVerified: boolean;
   blocked: boolean;
   createdAt: string;
 }
@@ -56,7 +57,8 @@ export interface Wallet {
 
 export interface OtpCode {
   id: string;
-  phone: string;
+  phone: string | null;
+  email: string | null;
   codeHash: string;
   purpose: string;
   attempts: number;

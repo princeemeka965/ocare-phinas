@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, UserPlus } from "lucide-react";
+import { Eye, EyeOff, UserPlus, MailCheck, ArrowLeft } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,18 @@ import { api, ApiError } from "@/lib/api";
 
 interface AuthResponse {
   customer: { id: string; name: string; email: string };
+}
+
+interface OtpResponse {
+  ok: boolean;
+  devCode?: string;
+}
+
+interface PendingRegistration {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
 }
 
 /** Only allow internal redirect targets (avoid open redirects). */
@@ -31,7 +43,15 @@ function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  // Two-phase sign-up: collect details → verify the emailed code → create account.
+  // `pending` drives the code phase; `draft` survives "Change details" so the
+  // form re-renders with what the customer already typed.
+  const [pending, setPending] = useState<PendingRegistration | null>(null);
+  const [draft, setDraft] = useState<PendingRegistration | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+
+  async function handleDetails(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const newErrors: Record<string, string> = {};
@@ -53,22 +73,60 @@ function RegisterForm() {
       return;
     }
 
+    const data: PendingRegistration = {
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.replace(/\s/g, ""),
+      password,
+    };
+
     setErrors({});
     setLoading(true);
     try {
-      const { customer } = await api.post<AuthResponse>("/api/auth/register", {
-        name: name.trim(),
-        email,
-        phone: phone.replace(/\s/g, ""),
-        password,
-      });
+      const res = await api.post<OtpResponse>("/api/auth/register", data);
+      setDraft(data);
+      setPending(data);
+      setDevCode(res.devCode ?? null);
+      setCode("");
+    } catch (err) {
+      setErrors({ form: err instanceof ApiError ? err.message : "Could not start sign-up. Please try again." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerify(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!pending) return;
+    if (!/^\d{6}$/.test(code)) {
+      setErrors({ code: "Enter the 6-digit code we emailed you." });
+      return;
+    }
+
+    setErrors({});
+    setLoading(true);
+    try {
+      const { customer } = await api.post<AuthResponse>("/api/auth/register/verify", { ...pending, code });
       setUser({ id: customer.id, email: customer.email, name: customer.name });
       // Greet the new customer with a one-time welcome banner on the next page.
       sessionStorage.setItem(WELCOME_KEY, customer.name.trim().split(" ")[0] || "");
-      // Phase 3: optionally route to phone OTP verification before continuing.
       router.push(next);
     } catch (err) {
-      setErrors({ form: err instanceof ApiError ? err.message : "Could not create your account. Please try again." });
+      setErrors({ code: err instanceof ApiError ? err.message : "Could not verify the code. Please try again." });
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!pending) return;
+    setErrors({});
+    setLoading(true);
+    try {
+      const res = await api.post<OtpResponse>("/api/auth/register", pending);
+      setDevCode(res.devCode ?? null);
+    } catch (err) {
+      setErrors({ code: err instanceof ApiError ? err.message : "Could not resend the code. Please try again." });
+    } finally {
       setLoading(false);
     }
   }
@@ -88,6 +146,81 @@ function RegisterForm() {
     </div>
   );
 
+  // ---- Phase 2: verify the emailed code ----------------------------------
+  if (pending) {
+    return (
+      <div className="py-12 sm:py-16">
+        <Container>
+          <div className="mx-auto w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10">
+                <MailCheck className="size-6 text-primary" />
+              </div>
+              <h1 className="text-h1 font-bold mb-2">Check your email</h1>
+              <p className="text-body-sm text-muted-foreground">
+                We sent a 6-digit code to <span className="font-medium text-foreground">{pending.email}</span>. Enter
+                it below to finish creating your account.
+              </p>
+            </div>
+
+            <form onSubmit={handleVerify} className="space-y-4" noValidate>
+              <div className="space-y-1.5">
+                <label htmlFor="code" className="text-body-sm font-medium">
+                  Verification code
+                </label>
+                <input
+                  id="code"
+                  name="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  required
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
+                  className="w-full h-12 px-3 rounded-lg border border-input bg-background text-center text-h3 tracking-[0.5em] placeholder:tracking-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
+                />
+                {errors.code && <p className="text-caption text-destructive">{errors.code}</p>}
+                {devCode && (
+                  <p className="text-caption text-muted-foreground">
+                    Dev: your code is <span className="font-mono font-medium">{devCode}</span>
+                  </p>
+                )}
+              </div>
+
+              <Button type="submit" size="lg" className="w-full gap-2" disabled={loading}>
+                <MailCheck className="size-4" />
+                {loading ? "Verifying…" : "Verify & create account"}
+              </Button>
+
+              <div className="flex items-center justify-between text-body-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPending(null);
+                    setErrors({});
+                  }}
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <ArrowLeft className="size-4" /> Change details
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={loading}
+                  className="text-primary font-medium hover:underline disabled:opacity-50"
+                >
+                  Resend code
+                </button>
+              </div>
+            </form>
+          </div>
+        </Container>
+      </div>
+    );
+  }
+
+  // ---- Phase 1: collect details ------------------------------------------
   return (
     <div className="py-12 sm:py-16">
       <Container>
@@ -99,10 +232,10 @@ function RegisterForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          {field("name", "Full name", { type: "text", autoComplete: "name", required: true, placeholder: "Chukwuemeka Anyanwu" })}
-          {field("email", "Email address", { type: "email", autoComplete: "email", required: true, placeholder: "you@example.com" })}
-          {field("phone", "Phone number (Nigerian)", { type: "tel", autoComplete: "tel", required: true, placeholder: "08012345678" })}
+        <form onSubmit={handleDetails} className="space-y-4" noValidate>
+          {field("name", "Full name", { type: "text", autoComplete: "name", required: true, placeholder: "Chukwuemeka Anyanwu", defaultValue: draft?.name })}
+          {field("email", "Email address", { type: "email", autoComplete: "email", required: true, placeholder: "you@example.com", defaultValue: draft?.email })}
+          {field("phone", "Phone number (Nigerian)", { type: "tel", autoComplete: "tel", required: true, placeholder: "08012345678", defaultValue: draft?.phone })}
 
           <div className="space-y-1.5">
             <label htmlFor="password" className="text-body-sm font-medium">Password</label>
@@ -113,6 +246,7 @@ function RegisterForm() {
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 required
+                defaultValue={draft?.password}
                 placeholder="At least 8 characters"
                 className="w-full h-10 pl-3 pr-10 rounded-lg border border-input bg-background text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
               />
@@ -137,6 +271,7 @@ function RegisterForm() {
                 type={showConfirm ? "text" : "password"}
                 autoComplete="new-password"
                 required
+                defaultValue={draft?.password}
                 placeholder="Repeat your password"
                 className="w-full h-10 pl-3 pr-10 rounded-lg border border-input bg-background text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
               />
@@ -158,7 +293,7 @@ function RegisterForm() {
 
           <Button type="submit" size="lg" className="w-full gap-2" disabled={loading}>
             <UserPlus className="size-4" />
-            {loading ? "Creating account…" : "Create account"}
+            {loading ? "Sending code…" : "Create account"}
           </Button>
 
           <p className="text-caption text-muted-foreground text-center">

@@ -15,7 +15,14 @@ async function request<T = unknown>(path: string, options: RequestInit = {}): Pr
   try {
     res = await fetch(path, {
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...options.headers },
+      headers: {
+        "Content-Type": "application/json",
+        // Marks the request as coming from our own app. The browser address bar
+        // and cross-site JS cannot set this header, so middleware uses it to
+        // reject direct navigation to /api/* (see src/middleware.ts).
+        "x-requested-by": "ocare-web",
+        ...options.headers,
+      },
       ...options,
     });
   } catch {

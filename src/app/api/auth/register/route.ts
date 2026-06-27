@@ -1,46 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
-import { supabase, unwrap } from "@/lib/supabase";
-import { hashPassword } from "@/lib/auth/password";
-import { signSession, sessionCookie, CUSTOMER_COOKIE } from "@/lib/auth/session";
-import { publicCustomer } from "@/lib/auth/serialize";
+import { supabase } from "@/lib/supabase";
+import { hashOtp } from "@/lib/auth/password";
 import { jsonError } from "@/lib/auth/guards";
-import type { Customer } from "@/lib/db/types";
+import { sendEmail, otpEmail } from "@/lib/email";
+import { registrationSchema, normalizeEmail, duplicateAccountError } from "@/lib/auth/registration";
 
-const schema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().min(7),
-  password: z.string().min(8),
-});
+const OTP_TTL_MINUTES = 10;
 
+/**
+ * POST /api/auth/register — step 1 of sign-up. Validates the details, ensures
+ * the email/phone are free, then emails a 6-digit code. The account is NOT
+ * created here — that happens in /api/auth/register/verify once the code is
+ * confirmed, so unverified emails never produce accounts.
+ */
 export async function POST(req: NextRequest) {
-  const parsed = schema.safeParse(await req.json().catch(() => null));
+  const parsed = registrationSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Invalid registration details.");
-  const { name, email, phone, password } = parsed.data;
 
-  // Block list is keyed on phone + email (survives re-registration — spec B9).
-  const dup = unwrap(
-    await supabase.from("Customer").select("id,blocked").or(`email.eq."${email}",phone.eq."${phone}"`).limit(1),
-  ) as { id: string; blocked: boolean }[];
-  if (dup[0]) {
-    if (dup[0].blocked) return jsonError(403, "This account is suspended — contact support.");
-    return jsonError(409, "An account with this email or phone already exists.");
+  const email = normalizeEmail(parsed.data.email);
+  const phone = parsed.data.phone;
+
+  const dupError = await duplicateAccountError(email, phone);
+  if (dupError) return dupError;
+
+  const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+  await supabase.from("OtpCode").insert({
+    email,
+    purpose: "register",
+    codeHash: await hashOtp(code),
+    expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString(),
+  });
+
+  try {
+    await sendEmail({ to: email, ...otpEmail(code) });
+  } catch (err) {
+    console.error("[register] OTP email failed", err);
+    return jsonError(502, "We couldn't send your verification email. Please try again.");
   }
 
-  const customer = unwrap(
-    await supabase
-      .from("Customer")
-      .insert({ name, email, phone, passwordHash: await hashPassword(password) })
-      .select("*")
-      .single(),
-  ) as Customer;
-  // The wallet is created alongside the customer (1:1).
-  await supabase.from("Wallet").insert({ customerId: customer.id });
-
-  const token = await signSession({ sub: customer.id, kind: "customer" });
-  const res = NextResponse.json({ customer: publicCustomer(customer) }, { status: 201 });
-  res.cookies.set(sessionCookie(CUSTOMER_COOKIE, token));
-  return res;
+  // In non-production, return the code so local/preview sign-up works without an
+  // email provider (mirrors the SMS OTP dev convention).
+  if (process.env.NODE_ENV !== "production") {
+    return NextResponse.json({ ok: true, devCode: code });
+  }
+  return NextResponse.json({ ok: true });
 }
