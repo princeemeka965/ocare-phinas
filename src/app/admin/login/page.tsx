@@ -47,7 +47,7 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="space-y-1.5">
               <label htmlFor="email" className="text-body-sm font-medium">Email address</label>
-              <input id="email" type="email" autoComplete="email" required placeholder="admin@ocarephinas.com"
+              <input id="email" type="email" autoComplete="email" required placeholder="name@email.com"
                 value={email} onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors" />
             </div>

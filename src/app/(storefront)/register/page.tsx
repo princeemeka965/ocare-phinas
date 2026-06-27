@@ -233,9 +233,9 @@ function RegisterForm() {
         </div>
 
         <form onSubmit={handleDetails} className="space-y-4" noValidate>
-          {field("name", "Full name", { type: "text", autoComplete: "name", required: true, placeholder: "Chukwuemeka Anyanwu", defaultValue: draft?.name })}
-          {field("email", "Email address", { type: "email", autoComplete: "email", required: true, placeholder: "you@example.com", defaultValue: draft?.email })}
-          {field("phone", "Phone number (Nigerian)", { type: "tel", autoComplete: "tel", required: true, placeholder: "08012345678", defaultValue: draft?.phone })}
+          {field("name", "Full name", { type: "text", autoComplete: "name", required: true, placeholder: "John Doe", defaultValue: draft?.name })}
+          {field("email", "Email address", { type: "email", autoComplete: "email", required: true, placeholder: "name@email.com", defaultValue: draft?.email })}
+          {field("phone", "Phone number (Nigerian)", { type: "tel", autoComplete: "tel", required: true, placeholder: "0800 000 0000", defaultValue: draft?.phone })}
 
           <div className="space-y-1.5">
             <label htmlFor="password" className="text-body-sm font-medium">Password</label>

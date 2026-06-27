@@ -69,7 +69,7 @@ function LoginForm() {
               type="email"
               autoComplete="email"
               required
-              placeholder="you@example.com"
+              placeholder="name@email.com"
               className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
             />
           </div>
