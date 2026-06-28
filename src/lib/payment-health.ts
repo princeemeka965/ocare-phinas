@@ -77,7 +77,9 @@ export function paymentHealth(input: PaymentScheduleInput): PaymentHealth {
   const balance = Math.max(0, price - amountPaid);
   const start = new Date(startDate);
   const totalPayments = Math.ceil(price / perPayment);
-  const completionDeadline = addDays(start, totalPayments * periodDays);
+  // Payment 1 is due on the start date itself, so the schedule spans
+  // (totalPayments − 1) periods after the start — the final payment's due date.
+  const completionDeadline = addDays(start, (totalPayments - 1) * periodDays);
 
   /* Whole periods elapsed since the schedule began. */
   const elapsedPeriods = Math.max(
@@ -93,9 +95,10 @@ export function paymentHealth(input: PaymentScheduleInput): PaymentHealth {
     Math.floor((now.getTime() - completionDeadline.getTime()) / DAY_MS),
   );
 
-  /* Next payment is one period after the last one the customer has funded. */
+  /* Next payment's due date. Payment 1 (paymentsMade = 0) is due on the start
+   * date, so the next unfunded period falls `paymentsMade` periods after start. */
   const paymentsMade = Math.floor(amountPaid / perPayment);
-  const nextDueDate = addDays(start, (paymentsMade + 1) * periodDays);
+  const nextDueDate = addDays(start, paymentsMade * periodDays);
 
   let status: PaymentHealthStatus;
   if (balance <= 0) status = "settled";
@@ -135,7 +138,7 @@ export type PlanPeriodStatus = "paid" | "due" | "missed" | "upcoming";
 export interface PlanPeriod {
   /** 1-based payment number. */
   index: number;
-  /** ISO date this payment is due (= start + index × period). */
+  /** ISO date this payment is due (= start + (index − 1) × period; #1 = start). */
   dueDate: string;
   /** Expected amount (the final period carries any remainder). */
   amount: number;
@@ -186,7 +189,8 @@ export function planPeriods(input: PlanPeriodsInput): PlanPeriod[] {
     else if (i <= elapsedDue) status = "missed";
     else if (i === elapsedDue + 1) status = "due";
     else status = "upcoming";
-    periods.push({ index: i, dueDate: addDays(start, i * periodDays).toISOString(), amount, status });
+    // Payment 1 is due on the start date; period i falls (i − 1) periods later.
+    periods.push({ index: i, dueDate: addDays(start, (i - 1) * periodDays).toISOString(), amount, status });
   }
   return periods;
 }
