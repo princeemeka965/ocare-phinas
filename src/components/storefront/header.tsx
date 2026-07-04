@@ -15,6 +15,7 @@ import {
   Tag,
   RefreshCw,
   Sparkles,
+  Sun,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -33,6 +34,7 @@ const PRIMARY_NAV = [
   { label: "Shop All", href: "/products", icon: ShoppingBag },
   { label: "Shop by Brand", href: "/brands", icon: Tag },
   { label: "Pay Small Small", href: "/pay-small-small", icon: Wallet, highlight: true },
+  { label: "Solar Plans", href: "/solar", icon: Sun },
   { label: "Pre-owned", href: "/category/pre-owned", icon: RefreshCw },
 ];
 
@@ -181,6 +183,14 @@ export function StorefrontHeader() {
                         onClick={() => setAccountOpen(false)}
                       >
                         <Wallet className="size-4" /> My Plan
+                      </Link>
+                      <Link
+                        href="/solar/application"
+                        role="menuitem"
+                        className="flex items-center gap-2 px-3 py-2 text-body-sm hover:bg-muted rounded-lg mx-1 transition-colors"
+                        onClick={() => setAccountOpen(false)}
+                      >
+                        <Sun className="size-4" /> My Solar Plan
                       </Link>
                       <Link
                         href="/profile"
@@ -350,6 +360,13 @@ export function StorefrontHeader() {
                 onClick={() => setMobileOpen(false)}
               >
                 <Wallet className="size-4 text-muted-foreground" /> My Plan
+              </Link>
+              <Link
+                href="/solar/application"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Sun className="size-4 text-muted-foreground" /> My Solar Plan
               </Link>
               <Link
                 href="/profile"

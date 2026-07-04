@@ -13,7 +13,7 @@
 
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users, GitFork,
-  AlertTriangle, Settings, ShieldCheck, type LucideIcon,
+  AlertTriangle, Settings, ShieldCheck, Sun, type LucideIcon,
 } from "lucide-react";
 
 /** One grantable area of the admin. */
@@ -25,6 +25,7 @@ export type AdminPermission =
   | "customers"
   | "groups"
   | "arrears"
+  | "solar"
   | "settings"
   | "team";
 
@@ -42,6 +43,7 @@ export const PERMISSION_META: Record<AdminPermission, PermissionMeta> = {
   customers: { label: "Customers", description: "View customers, block / unblock", icon: Users },
   groups: { label: "Groups", description: "Manage Pay Small Small groups", icon: GitFork },
   arrears: { label: "Arrears", description: "View missed & overdue payments", icon: AlertTriangle },
+  solar: { label: "Solar Plans", description: "Review KYC applications, deposits and installations", icon: Sun },
   settings: { label: "Settings", description: "Edit store settings", icon: Settings },
   team: { label: "Team & permissions", description: "Add sub-admins and assign privileges", icon: ShieldCheck },
 };
@@ -80,6 +82,7 @@ export const ROUTE_FOR_PERMISSION: Record<AdminPermission, string> = {
   customers: "/admin/customers",
   groups: "/admin/groups",
   arrears: "/admin/arrears",
+  solar: "/admin/solar",
   settings: "/admin/settings",
   team: "/admin/team",
 };
@@ -101,6 +104,7 @@ export function permissionForPath(pathname: string): AdminPermission | null {
     { prefix: "/admin/customers", perm: "customers" },
     { prefix: "/admin/groups", perm: "groups" },
     { prefix: "/admin/arrears", perm: "arrears" },
+    { prefix: "/admin/solar", perm: "solar" },
     { prefix: "/admin/team", perm: "team" },
     { prefix: "/admin/settings", perm: "settings" },
   ];

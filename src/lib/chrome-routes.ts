@@ -9,6 +9,7 @@ export const MINIMAL_CHROME_ROUTES = [
   "/forgot-password",
   "/pay-small-small/join",
   "/pay-small-small/solo",
+  "/solar/apply",
 ];
 
 export function isMinimalChrome(pathname: string): boolean {

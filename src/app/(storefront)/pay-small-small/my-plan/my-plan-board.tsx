@@ -19,9 +19,12 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/userStore";
+import { useSolarStore } from "@/store/solarStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES, type SoloFrequency } from "@/lib/pay-small-small";
-import { HEALTH_META, arrearsSummary, isArrears, type PaymentHealth } from "@/lib/payment-health";
+import { HEALTH_META, arrearsSummary, isArrears, paymentHealth, planPeriods, type PaymentHealth } from "@/lib/payment-health";
+import { SOLAR_STATUS_META, cadenceFor, packageBalance } from "@/lib/solar";
+import { Sun } from "lucide-react";
 
 type PlanType = "solo" | "group" | "outright";
 type PlanStatus = "active" | "processing" | "delivered" | "completed" | "awaiting_substitution";
@@ -82,6 +85,58 @@ const STATUS_META: Record<PlanStatus, { label: string; variant: "success" | "war
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function SolarPlanCard({ userId }: { userId: string }) {
+  const app = useSolarStore((s) => s.applications.find((a) => a.customerId === userId));
+  const pkg = useSolarStore((s) => (app ? s.packages.find((p) => p.id === app.packageId) : undefined));
+  if (!app) return null;
+
+  const meta = SOLAR_STATUS_META[app.status];
+  const inRepayment = app.status === "active_repayment" || app.status === "completed";
+  let progress = 0;
+  let subtitle = meta.description;
+
+  if (inRepayment && pkg) {
+    const cadence = cadenceFor(pkg, app.chosenFrequency);
+    const balance = packageBalance(pkg);
+    const startDate = app.activeRepaymentStartDate ?? app.createdAt;
+    const periods = planPeriods({
+      price: balance,
+      perPayment: cadence.amount,
+      frequency: app.chosenFrequency,
+      startDate,
+      paidIndices: app.paidPeriodIndices,
+    });
+    const amountPaid = periods.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
+    progress = Math.min(100, (amountPaid / balance) * 100);
+    const health = paymentHealth({ price: balance, amountPaid, perPayment: cadence.amount, frequency: app.chosenFrequency, startDate });
+    subtitle = isArrears(health.status) ? `${HEALTH_META[health.status].label} — ${naira(health.arrears)}` : `${naira(amountPaid)} of ${naira(balance)} paid`;
+  }
+
+  return (
+    <Link
+      href="/solar/application"
+      className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 mb-8 hover:border-primary/40 transition-colors"
+    >
+      <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 flex-shrink-0">
+        <Sun className="size-6 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <p className="text-body-sm font-semibold">{pkg?.name ?? "Solar Plan"}</p>
+          <Badge variant={meta.badge} className="text-micro">{meta.label}</Badge>
+        </div>
+        <p className="text-caption text-muted-foreground line-clamp-1">{subtitle}</p>
+        {inRepayment && (
+          <div className="relative h-1.5 rounded-full bg-muted overflow-hidden mt-2 max-w-xs">
+            <div className="h-full rounded-full" style={{ width: `${progress}%`, background: "linear-gradient(90deg, oklch(0.55 0.15 150), oklch(0.72 0.17 78))" }} />
+          </div>
+        )}
+      </div>
+      <ArrowRight className="size-5 text-muted-foreground flex-shrink-0" />
+    </Link>
+  );
 }
 
 export function MyPlanBoard() {
@@ -208,6 +263,9 @@ export function MyPlanBoard() {
             </p>
           </div>
         </div>
+
+        {/* Solar plan (separate flow — KYC-gated, its own status machine) */}
+        <SolarPlanCard userId={user.id} />
 
         {/* Active plans */}
         <h2 className="text-body font-semibold mb-3">Your purchases</h2>

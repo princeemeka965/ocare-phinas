@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CreditCard, AlertTriangle, Users, Package, ArrowRight, ChevronRight } from "lucide-react";
+import { CreditCard, AlertTriangle, Users, Package, ArrowRight, ChevronRight, Sun } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { useSolarStore } from "@/store/solarStore";
 import { STATUS_META, type OrderStatus } from "@/lib/orders";
 import { naira } from "@/lib/pay-small-small";
 
@@ -30,6 +31,7 @@ interface Stats {
 export function DashboardBoard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [awaiting, setAwaiting] = useState<RecentOrder[]>([]);
+  const solarAwaitingReview = useSolarStore((s) => s.applications.filter((a) => a.status === "under_review").length);
 
   useEffect(() => {
     api.get<Stats>("/api/admin/stats").then(setStats).catch(() => {});
@@ -55,6 +57,7 @@ export function DashboardBoard() {
     { label: "Missed payments", value: String(stats.missed.count), sub: `${naira(stats.missed.total)} behind`, icon: AlertTriangle, color: "text-warning", bg: "bg-warning/10", href: "/admin/arrears" },
     { label: "Open groups", value: String(stats.openGroups), sub: "Active PSS groups", icon: Users, color: "text-primary", bg: "bg-primary/10", href: "/admin/groups" },
     { label: "Low stock products", value: String(stats.lowStock), sub: "Below 3 units", icon: Package, color: "text-muted-foreground", bg: "bg-muted", href: "/admin/products" },
+    { label: "Solar applications awaiting review", value: String(solarAwaitingReview), sub: "KYC submissions to verify", icon: Sun, color: "text-primary", bg: "bg-primary/10", href: "/admin/solar" },
   ];
 
   return (
