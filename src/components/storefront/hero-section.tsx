@@ -174,6 +174,7 @@ export function HeroSection() {
             >
               <Link
                 href="/products"
+                prefetch={false}
                 className={cn(
                   buttonVariants({ size: "lg" }),
                   "gap-2 shadow-xl shadow-primary/25 hover:shadow-primary/45 transition-shadow",
@@ -183,6 +184,7 @@ export function HeroSection() {
               </Link>
               <Link
                 href="#categories"
+                prefetch={false}
                 className="inline-flex items-center justify-center h-11 px-6 rounded-lg border border-white/20 bg-white/[0.07] text-body text-white/80 backdrop-blur-sm hover:bg-white/[0.14] hover:border-white/35 transition-all duration-200 font-medium"
               >
                 Browse Categories

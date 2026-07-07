@@ -111,6 +111,7 @@ export function StorefrontHeader() {
             {/* Left — logo */}
             <Link
               href="/"
+              prefetch={false}
               className="flex-shrink-0"
               aria-label="OCare Phinas — home"
             >
@@ -127,6 +128,7 @@ export function StorefrontHeader() {
               {/* Cart */}
               <Link
                 href="/cart"
+                prefetch={false}
                 aria-label={`Shopping cart — ${count} ${count === 1 ? "item" : "items"}`}
                 className={cn(
                   buttonVariants({ variant: "ghost", size: "icon-sm" }),
@@ -218,12 +220,14 @@ export function StorefrontHeader() {
                 <div className="hidden lg:flex items-center gap-1 ml-1">
                   <Link
                     href="/login"
+                    prefetch={false}
                     className={buttonVariants({ variant: "ghost", size: "sm" })}
                   >
                     Log in
                   </Link>
                   <Link
                     href="/register"
+                    prefetch={false}
                     className={buttonVariants({ size: "sm" })}
                   >
                     Register
@@ -257,6 +261,7 @@ export function StorefrontHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-medium transition-colors",
                     item.highlight
@@ -321,6 +326,7 @@ export function StorefrontHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={cn(
                     "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm font-medium transition-colors",
                     item.highlight
@@ -349,6 +355,7 @@ export function StorefrontHeader() {
               </div>
               <Link
                 href="/orders"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
@@ -356,6 +363,7 @@ export function StorefrontHeader() {
               </Link>
               <Link
                 href="/pay-small-small/my-plan"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
@@ -363,6 +371,7 @@ export function StorefrontHeader() {
               </Link>
               <Link
                 href="/solar/application"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
@@ -370,6 +379,7 @@ export function StorefrontHeader() {
               </Link>
               <Link
                 href="/profile"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
@@ -390,6 +400,7 @@ export function StorefrontHeader() {
             <div className="space-y-2 pt-2">
               <Link
                 href="/register"
+                prefetch={false}
                 className={cn(buttonVariants(), "w-full justify-center")}
                 onClick={() => setMobileOpen(false)}
               >
@@ -397,6 +408,7 @@ export function StorefrontHeader() {
               </Link>
               <Link
                 href="/login"
+                prefetch={false}
                 className={cn(
                   buttonVariants({ variant: "outline" }),
                   "w-full justify-center",

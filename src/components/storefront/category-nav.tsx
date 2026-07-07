@@ -26,6 +26,7 @@ export async function CategoryNav({ activeCategorySlug }: CategoryNavProps) {
               <Link
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
+                prefetch={false}
                 className={cn(
                   "flex flex-shrink-0 flex-col items-center gap-1 rounded-lg px-3.5 py-2 transition-colors group",
                   active

@@ -54,6 +54,7 @@ export default function BrandsPage() {
               <Link
                 key={brand.slug}
                 href={brandHref(brand.name)}
+                prefetch={false}
                 className="group relative flex flex-col justify-between rounded-2xl border border-border bg-card p-5 overflow-hidden hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/40 transition-all duration-300"
               >
                 {/* decorative glow */}
@@ -108,6 +109,7 @@ export default function BrandsPage() {
               <Link
                 key={brand.slug}
                 href={brandHref(brand.name)}
+                prefetch={false}
                 className="group flex items-center gap-3 rounded-xl border border-border bg-card p-3 hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200"
               >
                 <div
