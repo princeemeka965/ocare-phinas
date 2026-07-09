@@ -69,6 +69,8 @@ export interface OrderItem {
  * moves to Processing at the fulfilment threshold (solo 50%, group 100%).
  */
 export interface OrderPlan {
+  /** The underlying Plan row's id — needed for admin plan actions (edit/delete). */
+  id: string;
   /** Plan target — the product price the schedule pays toward. */
   productPrice: number;
   /** Door-delivery fee folded into the schedule (0 for pickup). */
@@ -81,6 +83,12 @@ export interface OrderPlan {
   startDate: string;
   /** Payment numbers the admin has already confirmed as paid. */
   paidIndices: number[];
+  /** Raw Plan fields admin actions need (edit/delete) that the customer view doesn't. */
+  type: "solo" | "group";
+  status: string;
+  slots: number;
+  productId: string | null;
+  amountAllocated: number;
 }
 
 /** Fraction of the price that moves a Solo order into fulfilment. */
@@ -189,7 +197,11 @@ export const MOCK_ORDERS: Order[] = [
     total: 79990,
     shipping: { address: "3 Awolowo Avenue, Bodija", city: "Ibadan", state: "Oyo State" },
     // ₦7,000/week chosen by the customer; 7 of 12 weeks confirmed (~63%).
-    plan: { productPrice: 77490, deliveryFee: 0, perPayment: 7000, frequency: "weekly", startDate: "2026-04-05", paidIndices: [1, 2, 3, 4, 5, 6, 7] },
+    plan: {
+      id: "mock-plan-4", productPrice: 77490, deliveryFee: 0, perPayment: 7000, frequency: "weekly",
+      startDate: "2026-04-05", paidIndices: [1, 2, 3, 4, 5, 6, 7],
+      type: "solo", status: "delivered", slots: 2, productId: "mock-product-4", amountAllocated: 49000,
+    },
   },
   {
     id: "5",
@@ -208,7 +220,11 @@ export const MOCK_ORDERS: Order[] = [
     total: 62500,
     shipping: { address: "18 Nnamdi Azikiwe Street", city: "Enugu", state: "Enugu State" },
     // Strict slot daily of ₦2,000 (2 slots); 12 of 30 days confirmed (40%).
-    plan: { productPrice: 60000, deliveryFee: 0, perPayment: 2000, frequency: "daily", startDate: "2026-05-20", paidIndices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+    plan: {
+      id: "mock-plan-5", productPrice: 60000, deliveryFee: 0, perPayment: 2000, frequency: "daily",
+      startDate: "2026-05-20", paidIndices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      type: "group", status: "active", slots: 2, productId: "mock-product-5", amountAllocated: 24000,
+    },
   },
 ];
 
@@ -235,12 +251,18 @@ interface ApiOrderItem {
 }
 
 interface ApiOrderPlan {
+  id: string;
   productPrice: number;
   deliveryFee: number;
   perPayment: number;
   frequency: SoloFrequency;
   startDate: string;
   payments?: { periodIndex: number }[];
+  type: "solo" | "group";
+  status: string;
+  slots: number;
+  productId: string | null;
+  amountAllocated: number;
 }
 
 export interface ApiOrder {
@@ -291,12 +313,18 @@ export function mapApiOrder(o: ApiOrder): Order {
     },
     plan: o.plan
       ? {
+          id: o.plan.id,
           productPrice: o.plan.productPrice,
           deliveryFee: o.plan.deliveryFee,
           perPayment: o.plan.perPayment,
           frequency: o.plan.frequency,
           startDate: o.plan.startDate,
           paidIndices: (o.plan.payments ?? []).map((p) => p.periodIndex).sort((a, b) => a - b),
+          type: o.plan.type,
+          status: o.plan.status,
+          slots: o.plan.slots,
+          productId: o.plan.productId,
+          amountAllocated: o.plan.amountAllocated,
         }
       : undefined,
   };

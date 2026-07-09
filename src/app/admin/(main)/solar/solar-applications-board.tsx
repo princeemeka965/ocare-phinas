@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sun, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useSolarStore } from "@/store/solarStore";
+import { api } from "@/lib/api";
 import { naira } from "@/lib/pay-small-small";
-import { SOLAR_STATUS_META, type SolarApplicationStatus } from "@/lib/solar";
+import { SOLAR_STATUS_META } from "@/lib/solar";
+import type { SolarApplication, SolarApplicationStatus } from "@/lib/db/types";
 
 type TabKey = "all" | "under_review" | "not_approved" | "in_progress" | "completed";
 
@@ -28,19 +29,28 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
+type Row = SolarApplication & {
+  customer: { id: string; name: string; email: string; phone: string };
+  package: { name: string; totalAmount: number } | null;
+};
+
 export function SolarApplicationsBoard() {
-  const applications = useSolarStore((s) => s.applications);
-  const packages = useSolarStore((s) => s.packages);
+  const [applications, setApplications] = useState<Row[] | null>(null);
   const [tab, setTab] = useState<TabKey>("all");
 
+  useEffect(() => {
+    api.get<{ applications: Row[] }>("/api/admin/solar/applications").then((d) => setApplications(d.applications)).catch(() => setApplications([]));
+  }, []);
+
+  const rows = applications ?? [];
   const activeTab = TABS.find((t) => t.key === tab)!;
-  const rows = applications.filter((a) => activeTab.match(a.status));
+  const filtered = rows.filter((a) => activeTab.match(a.status));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
         {TABS.map((t) => {
-          const count = applications.filter((a) => t.match(a.status)).length;
+          const count = rows.filter((a) => t.match(a.status)).length;
           return (
             <button
               key={t.key}
@@ -58,15 +68,16 @@ export function SolarApplicationsBoard() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        {rows.length === 0 ? (
+        {applications === null ? (
+          <div className="py-16 text-center text-body-sm text-muted-foreground">Loading…</div>
+        ) : filtered.length === 0 ? (
           <div className="py-16 text-center">
             <Sun className="size-8 text-muted-foreground mx-auto mb-3 opacity-50" />
             <p className="text-body-sm text-muted-foreground">No applications in this view.</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {rows.map((app) => {
-              const pkg = packages.find((p) => p.id === app.packageId);
+            {filtered.map((app) => {
               const meta = SOLAR_STATUS_META[app.status];
               return (
                 <Link
@@ -75,14 +86,14 @@ export function SolarApplicationsBoard() {
                   className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/40 transition-colors group"
                 >
                   <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold flex-shrink-0 text-caption">
-                    {app.customerName.charAt(0).toUpperCase()}
+                    {app.customer.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-body-sm font-semibold truncate">{app.customerName}</p>
-                    <p className="text-caption text-muted-foreground font-mono">{app.reference} · {pkg?.name ?? "—"}</p>
+                    <p className="text-body-sm font-semibold truncate">{app.customer.name}</p>
+                    <p className="text-caption text-muted-foreground font-mono">{app.reference} · {app.package?.name ?? "—"}</p>
                   </div>
                   <p className="text-caption text-muted-foreground hidden sm:block flex-shrink-0">Applied {formatDate(app.createdAt)}</p>
-                  <p className="text-body-sm font-semibold flex-shrink-0 hidden sm:block">{naira(pkg?.totalAmount ?? 0)}</p>
+                  <p className="text-body-sm font-semibold flex-shrink-0 hidden sm:block">{naira(app.package?.totalAmount ?? 0)}</p>
                   <Badge variant={meta.badge} className="text-micro flex-shrink-0">{meta.label}</Badge>
                   <ChevronRight className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground flex-shrink-0" />
                 </Link>

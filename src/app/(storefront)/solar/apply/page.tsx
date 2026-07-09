@@ -8,6 +8,7 @@ import {
   ArrowRight,
   CheckCircle,
   FileText,
+  Loader2,
   Upload,
   User as UserIcon,
 } from "lucide-react";
@@ -18,21 +19,26 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { uploadSolarDocument } from "@/lib/cloudinary-upload";
 import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
-import { useSolarStore } from "@/store/solarStore";
 import { useBankSettings } from "@/hooks/useBankSettings";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import { BankTransferCard } from "@/components/storefront/bank-transfer-card";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
-import { SOLAR_ID_TYPES, SOLAR_STATUS_META, packageBalance, type SolarFrequency, type SolarIdType } from "@/lib/solar";
+import { SOLAR_ID_TYPES, SOLAR_STATUS_META, packageBalance } from "@/lib/solar";
+import type { PlanFrequency, SolarApplication, SolarIdType, SolarPackage } from "@/lib/db/types";
 
 type Step = "kyc" | "package" | "payment" | "done";
 
 interface FileField {
   name: string | null;
+  url: string | null;
+  uploading: boolean;
 }
+
+const EMPTY_FILE: FileField = { name: null, url: null, uploading: false };
 
 function FileInput({
   label,
@@ -41,7 +47,7 @@ function FileInput({
 }: {
   label: string;
   file: FileField;
-  onPick: (name: string) => void;
+  onPick: (file: File) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
@@ -50,14 +56,21 @@ function FileInput({
       <button
         type="button"
         onClick={() => ref.current?.click()}
+        disabled={file.uploading}
         className={cn(
           "flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-body-sm transition-colors",
-          file.name ? "border-primary/40 bg-primary/5" : "border-dashed border-input hover:border-primary/40",
+          file.url ? "border-primary/40 bg-primary/5" : "border-dashed border-input hover:border-primary/40",
         )}
       >
-        {file.name ? <FileText className="size-4 text-primary flex-shrink-0" /> : <Upload className="size-4 text-muted-foreground flex-shrink-0" />}
-        <span className={cn("truncate", file.name ? "text-foreground font-medium" : "text-muted-foreground")}>
-          {file.name ?? "Choose a file to upload"}
+        {file.uploading ? (
+          <Loader2 className="size-4 text-muted-foreground flex-shrink-0 animate-spin" />
+        ) : file.url ? (
+          <FileText className="size-4 text-primary flex-shrink-0" />
+        ) : (
+          <Upload className="size-4 text-muted-foreground flex-shrink-0" />
+        )}
+        <span className={cn("truncate", file.url ? "text-foreground font-medium" : "text-muted-foreground")}>
+          {file.uploading ? "Uploading…" : (file.name ?? "Choose a file to upload")}
         </span>
       </button>
       <input
@@ -68,7 +81,7 @@ function FileInput({
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";
-          if (f) onPick(f.name);
+          if (f) onPick(f);
         }}
       />
     </div>
@@ -77,11 +90,10 @@ function FileInput({
 
 export default function SolarApplyPage() {
   const user = useUserStore((s) => s.user);
-  const allPackages = useSolarStore((s) => s.packages);
-  const packages = allPackages.filter((p) => p.active);
-  const applications = useSolarStore((s) => s.applications);
-  const submitApplication = useSolarStore((s) => s.submitApplication);
   const settings = useBankSettings();
+
+  const [packages, setPackages] = useState<SolarPackage[] | null>(null);
+  const [existingApplication, setExistingApplication] = useState<SolarApplication | null | undefined>(undefined);
 
   const [step, setStep] = useState<Step>("kyc");
   const [submitting, setSubmitting] = useState(false);
@@ -95,26 +107,50 @@ export default function SolarApplyPage() {
       .catch(() => {});
   }, [user]);
 
+  useEffect(() => {
+    api.get<{ packages: SolarPackage[] }>("/api/solar/packages").then((d) => setPackages(d.packages)).catch(() => setPackages([]));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<{ application: SolarApplication | null }>("/api/solar/application")
+      .then((d) => setExistingApplication(d.application))
+      .catch(() => setExistingApplication(null));
+  }, [user]);
+
   /* KYC fields — name/email/phone are never re-collected; they're read from the account. */
   const [address, setAddress] = useState("");
   const [idType, setIdType] = useState<SolarIdType>("nin");
-  const [idDocument, setIdDocument] = useState<FileField>({ name: null });
-  const [utilityBill, setUtilityBill] = useState<FileField>({ name: null });
+  const [idDocument, setIdDocument] = useState<FileField>(EMPTY_FILE);
+  const [utilityBill, setUtilityBill] = useState<FileField>(EMPTY_FILE);
   const [employmentDetails, setEmploymentDetails] = useState("");
   const [emergencyContactName, setEmergencyContactName] = useState("");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
 
   /* Package + cadence. */
-  const [packageId, setPackageId] = useState<string | null>(packages[0]?.id ?? null);
-  const [frequency, setFrequency] = useState<SolarFrequency>("daily");
+  const [packageId, setPackageId] = useState<string | null>(null);
+  const [frequency, setFrequency] = useState<PlanFrequency>("daily");
 
-  const selectedPackage = packages.find((p) => p.id === packageId) ?? packages[0] ?? null;
+  const activePackages = packages ?? [];
+  const selectedPackage = activePackages.find((p) => p.id === packageId) ?? activePackages[0] ?? null;
   const cadence = selectedPackage?.cadenceOptions.find((c) => c.frequency === frequency);
+
+  async function pickFile(setter: (f: FileField) => void, file: File) {
+    setter({ name: file.name, url: null, uploading: true });
+    try {
+      const url = await uploadSolarDocument(file);
+      setter({ name: file.name, url, uploading: false });
+    } catch (e) {
+      setter(EMPTY_FILE);
+      toast.error(e instanceof Error ? e.message : "Upload failed.", "Upload failed");
+    }
+  }
 
   const kycValid =
     address.trim().length > 5 &&
-    !!idDocument.name &&
-    !!utilityBill.name &&
+    !!idDocument.url &&
+    !!utilityBill.url &&
     employmentDetails.trim().length > 3 &&
     emergencyContactName.trim().length > 1 &&
     emergencyContactPhone.trim().length > 6;
@@ -129,14 +165,21 @@ export default function SolarApplyPage() {
     );
   }
 
-  const myApplication = applications.find((a) => a.customerId === user.id);
+  if (packages === null || existingApplication === undefined) {
+    return (
+      <div className="py-16 sm:py-20">
+        <Container className="max-w-md text-center text-body-sm text-muted-foreground">Loading…</Container>
+      </div>
+    );
+  }
 
-  /* One active solar application at a time (addendum §8, decision 1) — a
-     rejected application re-applies from the status page, not here. Only
-     block at the KYC entry point: once the customer has moved past it in
-     this session, the application they're blocking on is the one they just
-     submitted (created at the payment step), so let payment/done render. */
-  if (myApplication && step === "kyc") {
+  /* One active solar application at a time (addendum §8) — a rejected or in-
+     progress application must be re-applied/tracked from the status page,
+     not re-submitted here. Completed/defaulted applications free the gate. */
+  const blockingApplication =
+    existingApplication && !["completed", "defaulted"].includes(existingApplication.status) ? existingApplication : null;
+
+  if (blockingApplication && step === "kyc") {
     return (
       <div className="py-16 sm:py-20">
         <Container className="max-w-md">
@@ -146,8 +189,8 @@ export default function SolarApplyPage() {
             </div>
             <h1 className="text-h2 font-bold mb-2">You already have a solar application</h1>
             <p className="text-body-sm text-muted-foreground mb-6">
-              Reference <span className="font-mono font-medium text-foreground">{myApplication.reference}</span> is
-              currently <strong>{SOLAR_STATUS_META[myApplication.status].label}</strong>. You can hold one solar
+              Reference <span className="font-mono font-medium text-foreground">{blockingApplication.reference}</span> is
+              currently <strong>{SOLAR_STATUS_META[blockingApplication.status].label}</strong>. You can hold one solar
               application at a time.
             </p>
             <Link href="/solar/application" className={cn(buttonVariants({ size: "lg" }), "w-full gap-2 justify-center")}>
@@ -159,7 +202,7 @@ export default function SolarApplyPage() {
     );
   }
 
-  if (packages.length === 0) {
+  if (activePackages.length === 0) {
     return (
       <div className="py-16 sm:py-20">
         <Container className="max-w-md text-center">
@@ -197,16 +240,12 @@ export default function SolarApplyPage() {
     async function confirmFeePaid() {
       setSubmitting(true);
       try {
-        submitApplication({
-          customerId: user!.id,
-          customerName: user!.name,
-          customerEmail: user!.email,
-          customerPhone: phone,
+        await api.post("/api/solar/application", {
           packageId: selectedPackage!.id,
           address,
           idType,
-          idDocumentName: idDocument.name!,
-          utilityBillName: utilityBill.name!,
+          idDocumentUrl: idDocument.url,
+          utilityBillUrl: utilityBill.url,
           employmentDetails,
           emergencyContactName,
           emergencyContactPhone,
@@ -214,6 +253,8 @@ export default function SolarApplyPage() {
         });
         toast.success("Registration fee recorded — your application is under review.", "Submitted");
         setStep("done");
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : "Couldn't submit your application.", "Something went wrong");
       } finally {
         setSubmitting(false);
       }
@@ -243,8 +284,12 @@ export default function SolarApplyPage() {
           />
 
           <p className="text-caption text-muted-foreground mt-5">
-            By continuing you agree that the registration fee is non-refundable, that approval depends on
-            successful verification, and that installation only begins once your deposit is confirmed.
+            By continuing you agree to the{" "}
+            <Link href="/solar/terms" className="text-primary underline underline-offset-2">
+              Solar Pay Small Small Terms &amp; Conditions
+            </Link>
+            , including that the registration fee is non-refundable, that approval depends on successful
+            verification, and that installation only begins once your deposit is confirmed.
           </p>
         </Container>
       </div>
@@ -264,14 +309,14 @@ export default function SolarApplyPage() {
           <p className="text-body-sm text-muted-foreground mb-6">Pick a package, then how often you&apos;d like to repay the balance.</p>
 
           <div className="space-y-3 mb-6">
-            {packages.map((pkg) => (
+            {activePackages.map((pkg) => (
               <button
                 key={pkg.id}
                 type="button"
                 onClick={() => setPackageId(pkg.id)}
                 className={cn(
                   "w-full text-left rounded-2xl border-2 p-5 transition-colors",
-                  packageId === pkg.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30",
+                  selectedPackage.id === pkg.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30",
                 )}
               >
                 <div className="flex items-center gap-3 mb-3">
@@ -370,8 +415,8 @@ export default function SolarApplyPage() {
             </Select>
           </div>
 
-          <FileInput label="ID document" file={idDocument} onPick={(name) => setIdDocument({ name })} />
-          <FileInput label="Utility bill / proof of address" file={utilityBill} onPick={(name) => setUtilityBill({ name })} />
+          <FileInput label="ID document" file={idDocument} onPick={(f) => pickFile(setIdDocument, f)} />
+          <FileInput label="Utility bill / proof of address" file={utilityBill} onPick={(f) => pickFile(setUtilityBill, f)} />
 
           <div>
             <label className="text-body-sm font-medium block mb-1.5">Employment / business details</label>

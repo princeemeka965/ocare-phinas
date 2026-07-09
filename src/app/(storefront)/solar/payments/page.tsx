@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sun,
@@ -16,14 +17,14 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { useUserStore } from "@/store/userStore";
-import { useSolarStore } from "@/store/solarStore";
 import { useBankSettings } from "@/hooks/useBankSettings";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
 import { waHref } from "@/lib/whatsapp";
-import { planPeriods, type PlanPeriodStatus } from "@/lib/payment-health";
-import { cadenceFor, packageBalance } from "@/lib/solar";
+import type { PlanPeriod, PlanPeriodStatus } from "@/lib/payment-health";
+import type { Plan, SolarApplication, SolarPackage } from "@/lib/db/types";
 
 const PERIOD_META: Record<PlanPeriodStatus, { label: string; badge: "success" | "warning" | "destructive" | "secondary" | "default"; icon: typeof Circle }> = {
   paid: { label: "Confirmed", badge: "success", icon: CheckCircle2 },
@@ -36,11 +37,25 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
+interface ApplicationData {
+  application: SolarApplication;
+  package: SolarPackage | null;
+  plan: Plan | null;
+  periods: PlanPeriod[] | null;
+}
+
 export default function SolarPaymentHistoryPage() {
   const user = useUserStore((s) => s.user);
-  const applications = useSolarStore((s) => s.applications);
-  const packages = useSolarStore((s) => s.packages);
   const settings = useBankSettings();
+  const [data, setData] = useState<ApplicationData | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<ApplicationData>("/api/solar/application")
+      .then((d) => setData(d.application ? d : null))
+      .catch(() => setData(null));
+  }, [user]);
 
   if (!user) {
     return (
@@ -51,9 +66,15 @@ export default function SolarPaymentHistoryPage() {
     );
   }
 
-  const app = applications.find((a) => a.customerId === user.id);
+  if (data === undefined) {
+    return (
+      <div className="py-16 sm:py-20">
+        <Container className="max-w-md text-center text-body-sm text-muted-foreground">Loading…</Container>
+      </div>
+    );
+  }
 
-  if (!app) {
+  if (!data) {
     return (
       <div className="py-16 sm:py-20">
         <Container className="max-w-md text-center">
@@ -70,27 +91,15 @@ export default function SolarPaymentHistoryPage() {
     );
   }
 
-  const pkg = packages.find((p) => p.id === app.packageId);
-  const cadence = pkg ? cadenceFor(pkg, app.chosenFrequency) : null;
+  const { application: app, package: pkg, plan, periods } = data;
   const freqMeta = SOLO_FREQUENCIES[app.chosenFrequency];
-
-  const periods =
-    pkg && cadence && app.activeRepaymentStartDate
-      ? planPeriods({
-          price: packageBalance(pkg),
-          perPayment: cadence.amount,
-          frequency: app.chosenFrequency,
-          startDate: app.activeRepaymentStartDate,
-          paidIndices: app.paidPeriodIndices,
-        })
-      : [];
 
   const oneOffPayments = [
     { label: "Registration fee", amount: pkg?.registrationFee ?? 0, date: app.registrationFeePaidAt, note: "Non-refundable" },
     ...(app.depositPaidAt ? [{ label: "Initial deposit", amount: pkg?.initialDeposit ?? 0, date: app.depositPaidAt, note: null }] : []),
   ];
 
-  const duePeriod = periods.find((p) => p.status === "due" || p.status === "missed");
+  const duePeriod = periods?.find((p) => p.status === "due" || p.status === "missed");
 
   return (
     <div className="py-8 sm:py-12">
@@ -123,11 +132,11 @@ export default function SolarPaymentHistoryPage() {
         </div>
 
         {/* Balance repayment schedule */}
-        {periods.length > 0 && cadence ? (
+        {periods && periods.length > 0 && plan ? (
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <h2 className="text-body font-semibold">Balance repayment</h2>
-              <span className="text-caption text-muted-foreground">{naira(cadence.amount)}{freqMeta.per}</span>
+              <span className="text-caption text-muted-foreground">{naira(plan.perPayment)}{freqMeta.per}</span>
             </div>
             <div className="divide-y divide-border">
               {periods.map((period) => {

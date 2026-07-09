@@ -39,6 +39,53 @@ export async function sendEmail({ to, subject, html, text }: SendEmailInput): Pr
   }
 }
 
+/** Escape HTML special characters — templates below interpolate admin/customer-entered text. */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Solar installation scheduled/rescheduled — includes the admin's notes, if any. */
+export function solarInstallationScheduledEmail(input: {
+  customerName: string;
+  date: string;
+  time: string;
+  notes?: string | null;
+}): { subject: string; html: string; text: string } {
+  const { customerName, date, time, notes } = input;
+  const formattedDate = new Date(date).toLocaleDateString("en-NG", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const subject = "Your solar installation is scheduled";
+  const text =
+    `Hi ${customerName}, your OCare Phinas solar installation has been scheduled for ${formattedDate} at ${time}.` +
+    (notes ? `\n\nNote from our team: ${notes}` : "");
+  const html = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <h1 style="font-size:20px;margin:0 0 8px">Installation scheduled</h1>
+      <p style="color:#475569;font-size:14px;margin:0 0 20px">Hi ${escapeHtml(customerName)}, your solar installation has been scheduled.</p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin-bottom:16px">
+        <p style="margin:0 0 4px;font-size:14px;color:#065f46"><strong>Date:</strong> ${escapeHtml(formattedDate)}</p>
+        <p style="margin:0;font-size:14px;color:#065f46"><strong>Time:</strong> ${escapeHtml(time)}</p>
+      </div>
+      ${
+        notes
+          ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
+        <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#334155">Note from our team</p>
+        <p style="margin:0;font-size:14px;color:#475569">${escapeHtml(notes)}</p>
+      </div>`
+          : ""
+      }
+      <p style="color:#94a3b8;font-size:12px;margin:20px 0 0">
+        If you have any questions, reply on WhatsApp or contact support.
+      </p>
+    </div>`;
+  return { subject, html, text };
+}
+
 /** Branded sign-up verification email for a 6-digit code. */
 export function otpEmail(code: string): { subject: string; html: string; text: string } {
   const subject = "Your OCare Phinas verification code";

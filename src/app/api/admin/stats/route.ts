@@ -10,7 +10,7 @@ export async function GET() {
   const gate = await requireAdmin("dashboard");
   if ("response" in gate) return gate.response;
 
-  const [awaitingRes, openGroupsRes, lowStockRes, recentRes, arrears] = await Promise.all([
+  const [awaitingRes, openGroupsRes, lowStockRes, recentRes, arrears, solarAwaitingRes] = await Promise.all([
     supabase.from("Order").select("*", { count: "exact", head: true }).eq("status", "payment_submitted"),
     supabase.from("Group").select("*", { count: "exact", head: true }).eq("status", "open"),
     supabase.from("Product").select("*", { count: "exact", head: true }).lt("stockQuantity", LOW_STOCK_THRESHOLD),
@@ -20,12 +20,14 @@ export async function GET() {
       .order("createdAt", { ascending: false })
       .limit(5),
     plansInArrears(),
+    supabase.from("SolarApplication").select("*", { count: "exact", head: true }).eq("status", "under_review"),
   ]);
 
   const awaitingConfirmation = awaitingRes.count ?? 0;
   const openGroups = openGroupsRes.count ?? 0;
   const lowStock = lowStockRes.count ?? 0;
   const recentOrders = unwrap(recentRes);
+  const solarAwaitingReview = solarAwaitingRes.count ?? 0;
 
   const overdue = arrears.filter((r) => r.health.status === "overdue");
   const missed = arrears.filter((r) => r.health.status === "missed");
@@ -37,5 +39,6 @@ export async function GET() {
     overdue: { count: overdue.length, total: overdue.reduce((s, r) => s + r.health.arrears, 0) },
     missed: { count: missed.length, total: missed.reduce((s, r) => s + r.health.arrears, 0) },
     recentOrders,
+    solarAwaitingReview,
   });
 }

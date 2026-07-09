@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { planPeriods, paymentHealth } from "@/lib/payment-health";
-import type { Order, Plan, PlanPayment } from "@/lib/db/types";
+import { reversePlan } from "@/lib/server/lifecycle";
+import type { Order, OrderItem, Plan, PlanPayment } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -41,4 +42,37 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   return NextResponse.json({ order, periods, health });
+}
+
+// DELETE /api/admin/orders/:id — outright orders reverse any decremented
+// stock inline and delete straight away. Solo/Group orders are blocked once
+// their plan has a confirmed payment (amountAllocated > 0) — the plan must
+// be deleted first (DELETE /api/admin/plans/:id), which reverses wallet/
+// stock/group effects; a fresh, never-paid plan is reversed and removed here.
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const gate = await requireAdmin("orders");
+  if ("response" in gate) return gate.response;
+  const { id } = await params;
+
+  const { data: order } = await supabase
+    .from("Order")
+    .select("*, items:OrderItem(*), plan:Plan(*)")
+    .eq("id", id)
+    .maybeSingle<Order & { items: OrderItem[]; plan: Plan | null }>();
+  if (!order) return jsonError(404, "Order not found.");
+
+  if (order.plan) {
+    if (order.plan.amountAllocated > 0) {
+      return jsonError(409, "This order has confirmed payments. Delete the plan first, then delete the order.");
+    }
+    await reversePlan(order.plan);
+  } else if (["processing", "shipped", "delivered"].includes(order.status)) {
+    // Outright — stock was decremented at confirm; restore it before deleting.
+    for (const item of order.items) {
+      if (item.productId) await supabase.rpc("inc_product_stock", { p_id: item.productId, delta: item.qty });
+    }
+  }
+
+  await supabase.from("Order").delete().eq("id", id);
+  return NextResponse.json({ ok: true });
 }

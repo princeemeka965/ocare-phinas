@@ -7,9 +7,16 @@
  * ------------------------------------------------------------------ */
 
 export type Condition = "new" | "used";
-export type PlanType = "outright" | "solo" | "group";
+export type PlanType = "outright" | "solo" | "group" | "solar";
 export type PlanFrequency = "daily" | "weekly" | "monthly";
-export type PlanStatus = "active" | "processing" | "delivered" | "completed" | "awaiting_substitution";
+export type PlanStatus =
+  | "active"
+  | "processing"
+  | "delivered"
+  | "completed"
+  | "awaiting_substitution"
+  | "awaiting_installation"
+  | "defaulted";
 export type OrderStatus =
   | "pending_payment"
   | "payment_submitted"
@@ -21,7 +28,7 @@ export type OrderStatus =
   | "cancelled";
 export type GroupStatus = "open" | "closed" | "completed";
 export type DeliveryMethod = "delivery" | "pickup";
-export type TxnType = "deposit" | "allocation" | "delivery_deduction" | "surplus_return";
+export type TxnType = "deposit" | "allocation" | "delivery_deduction" | "surplus_return" | "registration_fee";
 export type NotificationChannel = "sms" | "in_app";
 export type AdminRole = "super" | "sub";
 export type AdminPermission =
@@ -32,8 +39,10 @@ export type AdminPermission =
   | "customers"
   | "groups"
   | "arrears"
+  | "solar"
   | "settings"
-  | "team";
+  | "team"
+  | "reports";
 
 export interface Customer {
   id: string;
@@ -134,6 +143,7 @@ export interface Plan {
   status: PlanStatus;
   groupId: string | null;
   originalProductId: string | null;
+  solarApplicationId: string | null;
   createdAt: string;
 }
 
@@ -227,4 +237,72 @@ export interface Settings {
   cycleDays: number;
   groupSlots: number;
   groupPriceCap: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * Solar Pay Small Small — see ocare-phinas-solar-plan-addendum.md.      *
+ * ------------------------------------------------------------------ */
+
+export type SolarApplicationStatus =
+  | "under_review"
+  | "not_approved"
+  | "approved_awaiting_deposit"
+  | "installation_processing"
+  | "installation_scheduled"
+  | "active_repayment"
+  | "completed"
+  | "defaulted";
+
+export type SolarIdType = "nin" | "drivers_license" | "voters_card" | "passport";
+
+export interface SolarCadenceOption {
+  frequency: PlanFrequency;
+  amount: number;
+}
+
+export interface SolarPackage {
+  id: string;
+  name: string;
+  description: string;
+  registrationFee: number;
+  initialDeposit: number;
+  totalAmount: number;
+  cadenceOptions: SolarCadenceOption[];
+  active: boolean;
+  createdAt: string;
+}
+
+export interface SolarApplication {
+  id: string;
+  reference: string;
+  customerId: string;
+  packageId: string;
+  address: string;
+  idType: SolarIdType;
+  idDocumentUrl: string;
+  utilityBillUrl: string;
+  employmentDetails: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  chosenFrequency: PlanFrequency;
+  status: SolarApplicationStatus;
+  rejectionReason: string | null;
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  registrationFeePaidAt: string;
+  registrationFeeTxnId: string | null;
+  depositSubmittedAt: string | null;
+  depositPaidAt: string | null;
+  createdAt: string;
+}
+
+export interface SolarInstallation {
+  id: string;
+  applicationId: string;
+  scheduledDate: string | null;
+  scheduledTime: string | null;
+  scheduledById: string | null;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  notes: string | null;
 }

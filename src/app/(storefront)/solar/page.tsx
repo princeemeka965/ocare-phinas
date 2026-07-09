@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sun,
@@ -16,10 +17,11 @@ import {
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { useUserStore } from "@/store/userStore";
-import { useSolarStore } from "@/store/solarStore";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
 import { SOLAR_STATUS_META, packageBalance } from "@/lib/solar";
+import type { SolarApplication, SolarPackage } from "@/lib/db/types";
 
 const HOW_IT_WORKS = [
   { step: "1", title: "Apply", body: "Submit your KYC — address, ID, utility bill and employment details — then pay the ₦5,000 registration fee.", icon: FileCheck2 },
@@ -38,10 +40,20 @@ const PROTECTION_RULES = [
 
 export default function SolarPackagesPage() {
   const user = useUserStore((s) => s.user);
-  const allPackages = useSolarStore((s) => s.packages);
-  const packages = allPackages.filter((p) => p.active);
-  const applications = useSolarStore((s) => s.applications);
-  const myApplication = user ? applications.find((a) => a.customerId === user.id) : undefined;
+  const [packages, setPackages] = useState<SolarPackage[] | null>(null);
+  const [myApplication, setMyApplication] = useState<SolarApplication | null>(null);
+
+  useEffect(() => {
+    api.get<{ packages: SolarPackage[] }>("/api/solar/packages").then((d) => setPackages(d.packages)).catch(() => setPackages([]));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<{ application: SolarApplication | null }>("/api/solar/application")
+      .then((d) => setMyApplication(d.application))
+      .catch(() => {});
+  }, [user]);
 
   return (
     <div>
@@ -120,7 +132,11 @@ export default function SolarPackagesPage() {
             <p className="text-body-sm text-muted-foreground mt-2">Pick a package, then choose how you&apos;d like to repay the balance.</p>
           </div>
 
-          {packages.length === 0 ? (
+          {packages === null ? (
+            <div className="rounded-2xl border border-dashed border-border p-10 text-center text-body-sm text-muted-foreground">
+              Loading packages…
+            </div>
+          ) : packages.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-10 text-center text-body-sm text-muted-foreground">
               No solar packages are available right now.
             </div>

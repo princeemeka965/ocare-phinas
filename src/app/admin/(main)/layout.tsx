@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users, GitFork, Settings,
-  ShieldCheck, LogOut, Menu, X, ChevronRight, AlertTriangle, Lock, Eye, UserCog, Loader2, Sun,
+  ShieldCheck, LogOut, Menu, X, ChevronRight, AlertTriangle, Lock, Eye, UserCog, Loader2, Sun, BarChart3,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -37,6 +37,9 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
   { label: "Solar", items: [
     { label: "Applications", href: "/admin/solar", icon: Sun, permission: "solar" },
     { label: "Packages", href: "/admin/solar/packages", icon: Package, permission: "solar" },
+  ]},
+  { label: "Reports", items: [
+    { label: "Reports", href: "/admin/reports", icon: BarChart3, permission: "reports" },
   ]},
   { label: "System", items: [
     { label: "Team & permissions", href: "/admin/team", icon: ShieldCheck, permission: "team" },

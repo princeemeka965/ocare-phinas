@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -28,17 +28,34 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { PlanActions } from "@/components/admin/plan-actions";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
-import { useAdminStore } from "@/store/adminStore";
-import { useSolarStore } from "@/store/solarStore";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
 import { waLink } from "@/lib/whatsapp";
-import { planPeriods, paymentHealth, HEALTH_META, isArrears, type PlanPeriodStatus } from "@/lib/payment-health";
-import { SOLAR_ID_TYPES, SOLAR_STATUS_META, cadenceFor, packageBalance } from "@/lib/solar";
+import { HEALTH_META, isArrears, type PlanPeriod, type PlanPeriodStatus, type PaymentHealth } from "@/lib/payment-health";
+import { SOLAR_ID_TYPES, SOLAR_STATUS_META } from "@/lib/solar";
+import type { Plan, SolarApplication, SolarInstallation, SolarPackage } from "@/lib/db/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+type ApplicationDetail = SolarApplication & {
+  customer: { id: string; name: string; email: string; phone: string };
+  reviewedBy: { name: string } | null;
+};
+
+type InstallationDetail = SolarInstallation & { scheduledBy: { name: string } | null };
+
+interface DetailData {
+  application: ApplicationDetail;
+  package: SolarPackage | null;
+  installation: InstallationDetail | null;
+  plan: Plan | null;
+  periods: PlanPeriod[] | null;
+  health: PaymentHealth | null;
 }
 
 const PERIOD_META: Record<PlanPeriodStatus, { label: string; badge: "success" | "warning" | "destructive" | "secondary" | "default"; icon: typeof Circle }> = {
@@ -54,28 +71,40 @@ function fmt(iso: string): string {
 
 export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
   const { id } = use(params);
-  const adminName = useAdminStore((s) => s.current?.name ?? "Admin");
 
-  const app = useSolarStore((s) => s.applications.find((a) => a.id === id));
-  const pkg = useSolarStore((s) => (app ? s.packages.find((p) => p.id === app.packageId) : undefined));
-
-  const approveApplication = useSolarStore((s) => s.approveApplication);
-  const rejectApplication = useSolarStore((s) => s.rejectApplication);
-  const confirmDeposit = useSolarStore((s) => s.confirmDeposit);
-  const rejectDeposit = useSolarStore((s) => s.rejectDeposit);
-  const scheduleInstallation = useSolarStore((s) => s.scheduleInstallation);
-  const completeInstallation = useSolarStore((s) => s.completeInstallation);
-  const confirmBalancePayment = useSolarStore((s) => s.confirmBalancePayment);
-  const markDefaulted = useSolarStore((s) => s.markDefaulted);
+  const [data, setData] = useState<DetailData | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [confirmingPeriod, setConfirmingPeriod] = useState<number | null>(null);
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleNotes, setScheduleNotes] = useState("");
-  const [confirmingPeriod, setConfirmingPeriod] = useState<number | null>(null);
 
-  if (!app || !pkg) {
+  function refresh() {
+    return api
+      .get<DetailData>(`/api/admin/solar/applications/${id}`)
+      .then(setData)
+      .catch(() => setData(null));
+  }
+
+  useEffect(() => {
+    refresh();
+  }, [id]);
+
+  if (data === undefined) {
+    return (
+      <div className="max-w-3xl space-y-6">
+        <Link href="/admin/solar" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 -ml-2")}>
+          <ArrowLeft className="size-4" /> Solar Applications
+        </Link>
+        <p className="text-body-sm text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!data) {
     return (
       <div className="max-w-3xl space-y-6">
         <Link href="/admin/solar" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 -ml-2")}>
@@ -89,74 +118,83 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
     );
   }
 
+  const { application: app, package: pkg, installation, plan, periods, health } = data;
   const meta = SOLAR_STATUS_META[app.status];
   const idTypeLabel = SOLAR_ID_TYPES.find((t) => t.value === app.idType)?.label ?? app.idType;
-  const cadence = cadenceFor(pkg, app.chosenFrequency);
   const freqMeta = SOLO_FREQUENCIES[app.chosenFrequency];
 
-  function approve() {
-    approveApplication(app!.id, adminName);
-    toast.success(`${app!.customerName} approved — awaiting deposit.`, "Application approved");
+  async function runAction(action: () => Promise<unknown>, successMsg: string, successTitle: string) {
+    setBusy(true);
+    try {
+      await action();
+      toast.success(successMsg, successTitle);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Something went wrong.", "Action failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function reject() {
+  const approve = () =>
+    runAction(() => api.post(`/api/admin/solar/applications/${id}/approve`), `${app.customer.name} approved — awaiting deposit.`, "Application approved");
+
+  async function reject() {
     if (!rejectReason.trim()) {
       toast.error("Add a reason so the customer knows why.", "Reason required");
       return;
     }
-    rejectApplication(app!.id, adminName, rejectReason.trim());
-    toast.info(`${app!.customerName}'s application rejected.`, "Application rejected");
+    await runAction(
+      () => api.post(`/api/admin/solar/applications/${id}/reject`, { reason: rejectReason.trim() }),
+      `${app.customer.name}'s application rejected.`,
+      "Application rejected",
+    );
     setRejectOpen(false);
     setRejectReason("");
   }
 
-  function onConfirmDeposit() {
-    confirmDeposit(app!.id);
-    toast.success("Deposit confirmed — installation is now processing.", "Deposit confirmed");
-  }
+  const onConfirmDeposit = () =>
+    runAction(() => api.post(`/api/admin/solar/applications/${id}/confirm-deposit`), "Deposit confirmed — installation is now processing.", "Deposit confirmed");
 
-  function onRejectDeposit() {
-    rejectDeposit(app!.id);
-    toast.info("Deposit payment rejected — customer can resubmit.", "Deposit rejected");
-  }
+  const onRejectDeposit = () =>
+    runAction(() => api.post(`/api/admin/solar/applications/${id}/reject-deposit`), "Deposit payment rejected — customer can resubmit.", "Deposit rejected");
 
-  function submitSchedule(e: React.FormEvent) {
+  async function submitSchedule(e: React.FormEvent) {
     e.preventDefault();
     if (!scheduleDate || !scheduleTime) {
       toast.error("Pick a date and time.", "Missing details");
       return;
     }
-    scheduleInstallation(app!.id, adminName, scheduleDate, scheduleTime, scheduleNotes.trim() || undefined);
-    toast.success("Installation scheduled — customer notified.", "Scheduled");
+    await runAction(
+      () => api.post(`/api/admin/solar/applications/${id}/schedule`, { date: scheduleDate, time: scheduleTime, notes: scheduleNotes.trim() || undefined }),
+      "Installation scheduled — customer notified.",
+      "Scheduled",
+    );
   }
 
-  function markComplete() {
-    completeInstallation(app!.id);
-    toast.success("Installation marked complete — repayment schedule has started.", "Installed");
-  }
+  const markComplete = () =>
+    runAction(() => api.post(`/api/admin/solar/applications/${id}/complete-installation`), "Installation marked complete — repayment schedule has started.", "Installed");
 
-  function confirmPeriod(index: number) {
+  async function confirmPeriod(index: number) {
     setConfirmingPeriod(index);
-    confirmBalancePayment(app!.id, index);
-    toast.success(`${freqMeta.label} payment ${index} confirmed.`, "Payment confirmed");
-    setConfirmingPeriod(null);
+    try {
+      await api.post(`/api/admin/solar/applications/${id}/payments`, { periodIndex: index });
+      toast.success(`${freqMeta.label} payment ${index} confirmed.`, "Payment confirmed");
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't confirm that payment.", "Something went wrong");
+    } finally {
+      setConfirmingPeriod(null);
+    }
   }
 
-  function onMarkDefaulted() {
-    if (!confirm(`Mark ${app!.customerName}'s solar plan as defaulted? This flags future solar eligibility.`)) return;
-    markDefaulted(app!.id);
-    toast.info("Plan marked as defaulted.", "Defaulted");
+  async function onMarkDefaulted() {
+    if (!confirm(`Mark ${app.customer.name}'s solar plan as defaulted? This flags future solar eligibility.`)) return;
+    await runAction(() => api.post(`/api/admin/solar/applications/${id}/default`), "Plan marked as defaulted.", "Defaulted");
   }
 
-  const balance = packageBalance(pkg);
-  const startDate = app.activeRepaymentStartDate;
-  const periods = startDate
-    ? planPeriods({ price: balance, perPayment: cadence.amount, frequency: app.chosenFrequency, startDate, paidIndices: app.paidPeriodIndices })
-    : [];
-  const amountPaid = periods.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
-  const health = startDate
-    ? paymentHealth({ price: balance, amountPaid, perPayment: cadence.amount, frequency: app.chosenFrequency, startDate })
-    : null;
+  const balance = plan?.productPrice ?? 0;
+  const amountPaid = plan?.amountAllocated ?? 0;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -171,22 +209,22 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
             <h1 className="text-h2 font-bold font-mono">{app.reference}</h1>
             <Badge variant={meta.badge} className="text-micro gap-1"><Sun className="size-3" />{meta.label}</Badge>
           </div>
-          <p className="text-caption text-muted-foreground mt-1">{pkg.name} · applied {fmt(app.createdAt)}</p>
+          <p className="text-caption text-muted-foreground mt-1">{pkg?.name ?? "Solar Plan"} · applied {fmt(app.createdAt)}</p>
         </div>
-        <p className="text-h2 font-bold text-primary">{naira(pkg.totalAmount)}</p>
+        <p className="text-h2 font-bold text-primary">{naira(pkg?.totalAmount ?? 0)}</p>
       </div>
 
       {/* Customer + KYC */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
           <h2 className="text-body font-semibold mb-1">Customer</h2>
-          <p className="font-semibold text-body-sm">{app.customerName}</p>
-          <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><Mail className="size-3.5 flex-shrink-0" /> {app.customerEmail}</p>
-          <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><Phone className="size-3.5 flex-shrink-0" /> {app.customerPhone || "—"}</p>
+          <p className="font-semibold text-body-sm">{app.customer.name}</p>
+          <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><Mail className="size-3.5 flex-shrink-0" /> {app.customer.email}</p>
+          <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><Phone className="size-3.5 flex-shrink-0" /> {app.customer.phone || "—"}</p>
           <p className="flex items-start gap-2 text-body-sm text-muted-foreground"><MapPin className="size-3.5 flex-shrink-0 mt-0.5" /> {app.address}</p>
-          {app.customerPhone && (
+          {app.customer.phone && (
             <a
-              href={waLink(app.customerPhone, `Hi ${app.customerName}, regarding your OCare Phinas solar application ${app.reference}…`)}
+              href={waLink(app.customer.phone, `Hi ${app.customer.name}, regarding your OCare Phinas solar application ${app.reference}…`)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#25D366] hover:bg-[#1eb85a] text-white font-semibold text-caption px-3 py-2 transition-colors"
@@ -199,23 +237,40 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
         <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
           <h2 className="text-body font-semibold mb-1">KYC &amp; documents</h2>
           <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><UserCog className="size-3.5 flex-shrink-0" /> {idTypeLabel}</p>
-          <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><FileText className="size-3.5 flex-shrink-0" /> ID document: <span className="text-foreground font-medium">{app.idDocumentName ?? "—"}</span></p>
-          <p className="flex items-center gap-2 text-body-sm text-muted-foreground"><FileText className="size-3.5 flex-shrink-0" /> Utility bill: <span className="text-foreground font-medium">{app.utilityBillName ?? "—"}</span></p>
+          <p className="flex items-center gap-2 text-body-sm text-muted-foreground">
+            <FileText className="size-3.5 flex-shrink-0" /> ID document:{" "}
+            <a href={app.idDocumentUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">View</a>
+          </p>
+          <p className="flex items-center gap-2 text-body-sm text-muted-foreground">
+            <FileText className="size-3.5 flex-shrink-0" /> Utility bill:{" "}
+            <a href={app.utilityBillUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">View</a>
+          </p>
           <p className="flex items-start gap-2 text-body-sm text-muted-foreground"><Briefcase className="size-3.5 flex-shrink-0 mt-0.5" /> {app.employmentDetails}</p>
           <p className="text-body-sm text-muted-foreground">Emergency contact: <span className="text-foreground font-medium">{app.emergencyContactName} ({app.emergencyContactPhone})</span></p>
         </div>
       </div>
 
+      {/* Plan admin actions — edit/delete the underlying Plan, once one exists (from confirmSolarDeposit onward) */}
+      {plan && (
+        <PlanActions
+          plan={plan}
+          onUpdated={() => refresh()}
+          onDeleted={() => refresh()}
+        />
+      )}
+
       {/* Payment history */}
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-body font-semibold mb-3">Payment history</h2>
-        <div className="space-y-2 text-body-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Registration fee ({fmt(app.registrationFeePaidAt)})</span><span className="font-semibold">{naira(pkg.registrationFee)}</span></div>
-          {app.depositPaidAt && (
-            <div className="flex justify-between"><span className="text-muted-foreground">Deposit confirmed ({fmt(app.depositPaidAt)})</span><span className="font-semibold">{naira(pkg.initialDeposit)}</span></div>
-          )}
+      {pkg && (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-body font-semibold mb-3">Payment history</h2>
+          <div className="space-y-2 text-body-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Registration fee ({fmt(app.registrationFeePaidAt)})</span><span className="font-semibold">{naira(pkg.registrationFee)}</span></div>
+            {app.depositPaidAt && (
+              <div className="flex justify-between"><span className="text-muted-foreground">Deposit confirmed ({fmt(app.depositPaidAt)})</span><span className="font-semibold">{naira(pkg.initialDeposit)}</span></div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Review — approve / reject */}
       {app.status === "under_review" && (
@@ -225,10 +280,10 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
             Verify the documents and registration fee against your records, then approve or reject.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
-            <button onClick={approve} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-success text-white font-semibold text-body-sm hover:bg-success/90 transition-colors">
+            <button onClick={approve} disabled={busy} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-success text-white font-semibold text-body-sm hover:bg-success/90 transition-colors disabled:opacity-60">
               <CheckCircle2 className="size-4" /> Approve
             </button>
-            <button onClick={() => setRejectOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/30 text-destructive font-semibold text-body-sm hover:bg-destructive/10 transition-colors">
+            <button onClick={() => setRejectOpen(true)} disabled={busy} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/30 text-destructive font-semibold text-body-sm hover:bg-destructive/10 transition-colors disabled:opacity-60">
               <XCircle className="size-4" /> Reject
             </button>
           </div>
@@ -239,12 +294,12 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
           <p className="text-body-sm font-semibold flex items-center gap-2"><XCircle className="size-4 text-destructive" /> Not approved</p>
           <p className="text-body-sm text-muted-foreground mt-1">{app.rejectionReason}</p>
-          <p className="text-micro text-muted-foreground mt-2">By {app.reviewedBy} · {app.reviewedAt && fmt(app.reviewedAt)}</p>
+          <p className="text-micro text-muted-foreground mt-2">By {app.reviewedBy?.name ?? "—"} · {app.reviewedAt && fmt(app.reviewedAt)}</p>
         </div>
       )}
 
       {/* Deposit */}
-      {app.status === "approved_awaiting_deposit" && (
+      {app.status === "approved_awaiting_deposit" && pkg && (
         <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
           <p className="text-body-sm font-semibold">Initial deposit — {naira(pkg.initialDeposit)}</p>
           {!app.depositSubmittedAt ? (
@@ -258,10 +313,10 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
                 Customer says they sent this on {fmt(app.depositSubmittedAt)}. Confirm once you&apos;ve seen the funds.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={onConfirmDeposit} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-success text-white font-semibold text-body-sm hover:bg-success/90 transition-colors">
+                <button onClick={onConfirmDeposit} disabled={busy} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-success text-white font-semibold text-body-sm hover:bg-success/90 transition-colors disabled:opacity-60">
                   <CheckCircle2 className="size-4" /> Confirm deposit
                 </button>
-                <button onClick={onRejectDeposit} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/30 text-destructive font-semibold text-body-sm hover:bg-destructive/10 transition-colors">
+                <button onClick={onRejectDeposit} disabled={busy} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-destructive/30 text-destructive font-semibold text-body-sm hover:bg-destructive/10 transition-colors disabled:opacity-60">
                   <XCircle className="size-4" /> Reject
                 </button>
               </div>
@@ -271,44 +326,44 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
       )}
 
       {/* Installation scheduling */}
-      {app.status === "installation_processing" && (
+      {(app.status === "installation_processing" || app.status === "installation_scheduled") && (
         <form onSubmit={submitSchedule} className="rounded-2xl border border-border bg-card p-5 space-y-4">
-          <p className="text-body-sm font-semibold flex items-center gap-1.5"><Wrench className="size-4 text-primary" /> Schedule installation</p>
+          <p className="text-body-sm font-semibold flex items-center gap-1.5"><Wrench className="size-4 text-primary" /> {app.status === "installation_scheduled" ? "Reschedule installation" : "Schedule installation"}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-body-sm font-medium block mb-1.5">Date</label>
-              <Input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} />
+              <Input type="date" value={scheduleDate || installation?.scheduledDate?.slice(0, 10) || ""} onChange={(e) => setScheduleDate(e.target.value)} />
             </div>
             <div>
               <label className="text-body-sm font-medium block mb-1.5">Time</label>
-              <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
+              <Input type="time" value={scheduleTime || installation?.scheduledTime || ""} onChange={(e) => setScheduleTime(e.target.value)} />
             </div>
           </div>
           <div>
             <label className="text-body-sm font-medium block mb-1.5">Notes (optional)</label>
-            <Textarea rows={2} value={scheduleNotes} onChange={(e) => setScheduleNotes(e.target.value)} placeholder="e.g. access instructions, team assigned" />
+            <Textarea rows={2} value={scheduleNotes || installation?.notes || ""} onChange={(e) => setScheduleNotes(e.target.value)} placeholder="e.g. access instructions, team assigned" />
           </div>
-          <Button type="submit" className="gap-2"><CalendarClock className="size-4" /> Schedule installation</Button>
+          <Button type="submit" disabled={busy} className="gap-2"><CalendarClock className="size-4" /> {app.status === "installation_scheduled" ? "Update schedule" : "Schedule installation"}</Button>
         </form>
       )}
 
       {/* Installation scheduled — mark complete */}
-      {app.status === "installation_scheduled" && (
+      {app.status === "installation_scheduled" && installation && (
         <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
           <p className="text-body-sm font-semibold flex items-center gap-1.5"><CalendarClock className="size-4 text-primary" /> Installation scheduled</p>
           <p className="text-body-sm text-muted-foreground">
-            {app.installation.scheduledDate && fmt(app.installation.scheduledDate)} at {app.installation.scheduledTime} · set by {app.installation.scheduledBy}
+            {installation.scheduledDate && fmt(installation.scheduledDate)} at {installation.scheduledTime} · set by {installation.scheduledBy?.name ?? "—"}
           </p>
-          {app.installation.notes && <p className="text-caption text-muted-foreground">{app.installation.notes}</p>}
-          <Button onClick={markComplete} className="gap-2"><CheckCircle2 className="size-4" /> Mark installation complete</Button>
+          {installation.notes && <p className="text-caption text-muted-foreground">{installation.notes}</p>}
+          <Button onClick={markComplete} disabled={busy} className="gap-2"><CheckCircle2 className="size-4" /> Mark installation complete</Button>
         </div>
       )}
 
       {/* Repayment record */}
-      {(app.status === "active_repayment" || app.status === "completed" || app.status === "defaulted") && health && (
+      {(app.status === "active_repayment" || app.status === "completed" || app.status === "defaulted") && plan && health && periods && (
         <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-body-sm font-semibold">Balance repayment — {naira(cadence.amount)}{freqMeta.per}</p>
+            <p className="text-body-sm font-semibold">Balance repayment — {naira(plan.perPayment)}{freqMeta.per}</p>
             {isArrears(health.status) && (
               <Badge variant={HEALTH_META[health.status].badge} className="text-micro gap-1">
                 <AlertTriangle className="size-3" /> {HEALTH_META[health.status].label}
@@ -349,7 +404,7 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
           </div>
 
           {app.status === "active_repayment" && health.status === "overdue" && (
-            <button onClick={onMarkDefaulted} className="inline-flex items-center gap-1.5 text-caption font-medium text-destructive hover:underline">
+            <button onClick={onMarkDefaulted} disabled={busy} className="inline-flex items-center gap-1.5 text-caption font-medium text-destructive hover:underline disabled:opacity-60">
               <ShieldAlert className="size-3.5" /> Mark as defaulted
             </button>
           )}
@@ -365,7 +420,7 @@ export default function AdminSolarApplicationDetailPage({ params }: PageProps) {
           <Textarea rows={4} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="e.g. Utility bill doesn't match the address provided." />
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={reject}>Reject application</Button>
+            <Button variant="destructive" onClick={reject} disabled={busy}>Reject application</Button>
           </div>
         </div>
       </Dialog>

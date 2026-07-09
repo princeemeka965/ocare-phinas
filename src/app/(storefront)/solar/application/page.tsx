@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sun,
@@ -20,24 +20,17 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
-import { useSolarStore } from "@/store/solarStore";
 import { useBankSettings } from "@/hooks/useBankSettings";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import { BankTransferCard } from "@/components/storefront/bank-transfer-card";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
 import { waHref } from "@/lib/whatsapp";
-import { paymentHealth, planPeriods, HEALTH_META, isArrears } from "@/lib/payment-health";
-import {
-  SOLAR_STATUS_FLOW,
-  SOLAR_STATUS_META,
-  cadenceFor,
-  packageBalance,
-  type SolarApplication,
-  type SolarApplicationStatus,
-  type SolarPackage,
-} from "@/lib/solar";
+import { HEALTH_META, isArrears, type PaymentHealth } from "@/lib/payment-health";
+import { SOLAR_STATUS_FLOW, SOLAR_STATUS_META } from "@/lib/solar";
+import type { Plan, SolarApplication, SolarApplicationStatus, SolarInstallation, SolarPackage } from "@/lib/db/types";
 
 const FLOW_LABELS: Record<SolarApplicationStatus, string> = {
   under_review: "Under review",
@@ -54,15 +47,32 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
 }
 
+interface ApplicationData {
+  application: SolarApplication;
+  package: SolarPackage | null;
+  installation: SolarInstallation | null;
+  plan: Plan | null;
+  health: PaymentHealth | null;
+}
+
 export default function MySolarApplicationPage() {
   const user = useUserStore((s) => s.user);
-  const applications = useSolarStore((s) => s.applications);
-  const packages = useSolarStore((s) => s.packages);
-  const submitDepositPayment = useSolarStore((s) => s.submitDepositPayment);
-  const reapply = useSolarStore((s) => s.reapply);
   const settings = useBankSettings();
 
+  const [data, setData] = useState<ApplicationData | null | undefined>(undefined);
   const [submittingDeposit, setSubmittingDeposit] = useState(false);
+
+  function refresh() {
+    return api
+      .get<ApplicationData>("/api/solar/application")
+      .then((d) => setData(d.application ? d : null))
+      .catch(() => setData(null));
+  }
+
+  useEffect(() => {
+    if (!user) return;
+    refresh();
+  }, [user]);
 
   if (!user) {
     return (
@@ -73,9 +83,15 @@ export default function MySolarApplicationPage() {
     );
   }
 
-  const app = applications.find((a) => a.customerId === user.id);
+  if (data === undefined) {
+    return (
+      <div className="py-16 sm:py-20">
+        <Container className="max-w-md text-center text-body-sm text-muted-foreground">Loading…</Container>
+      </div>
+    );
+  }
 
-  if (!app) {
+  if (!data) {
     return (
       <div className="py-16 sm:py-20">
         <Container className="max-w-md text-center">
@@ -94,20 +110,31 @@ export default function MySolarApplicationPage() {
     );
   }
 
-  const pkg = packages.find((p) => p.id === app.packageId);
+  const { application: app, package: pkg, installation, plan, health } = data;
   const meta = SOLAR_STATUS_META[app.status];
   const flowIdx = SOLAR_STATUS_FLOW.indexOf(app.status);
 
-  function sendDepositPayment() {
+  async function sendDepositPayment() {
     setSubmittingDeposit(true);
-    submitDepositPayment(app!.id);
-    toast.success("Thanks — we'll confirm your deposit once we see it on our statement.", "Deposit submitted");
-    setSubmittingDeposit(false);
+    try {
+      await api.post("/api/solar/application/deposit-claim");
+      toast.success("Thanks — we'll confirm your deposit once we see it on our statement.", "Deposit submitted");
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't record your deposit claim.", "Something went wrong");
+    } finally {
+      setSubmittingDeposit(false);
+    }
   }
 
-  function handleReapply() {
-    reapply(app!.id);
-    toast.success("Application resubmitted — back under review.", "Re-applied");
+  async function handleReapply() {
+    try {
+      await api.post("/api/solar/application/reapply");
+      toast.success("Application resubmitted — back under review.", "Re-applied");
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't re-apply.", "Something went wrong");
+    }
   }
 
   return (
@@ -231,7 +258,7 @@ export default function MySolarApplicationPage() {
                 <p className="text-body-sm text-muted-foreground">
                   Installation scheduled for{" "}
                   <strong className="text-foreground">
-                    {app.installation.scheduledDate ? formatDate(app.installation.scheduledDate) : "—"} at {app.installation.scheduledTime}
+                    {installation?.scheduledDate ? formatDate(installation.scheduledDate) : "—"} at {installation?.scheduledTime}
                   </strong>
                   .
                 </p>
@@ -244,8 +271,14 @@ export default function MySolarApplicationPage() {
         )}
 
         {/* Repayment summary */}
-        {(app.status === "active_repayment" || app.status === "completed" || app.status === "defaulted") && pkg && (
-          <RepaymentSummary app={app} pkg={pkg} whatsappNumber={settings?.whatsappNumber} />
+        {(app.status === "active_repayment" || app.status === "completed" || app.status === "defaulted") && plan && health && (
+          <RepaymentSummary
+            reference={app.reference}
+            status={app.status}
+            plan={plan}
+            health={health}
+            whatsappNumber={settings?.whatsappNumber}
+          />
         )}
       </Container>
     </div>
@@ -253,43 +286,31 @@ export default function MySolarApplicationPage() {
 }
 
 function RepaymentSummary({
-  app,
-  pkg,
+  reference,
+  status,
+  plan,
+  health,
   whatsappNumber,
 }: {
-  app: SolarApplication;
-  pkg: SolarPackage;
+  reference: string;
+  status: SolarApplicationStatus;
+  plan: Plan;
+  health: PaymentHealth;
   whatsappNumber?: string;
 }) {
-  const cadence = cadenceFor(pkg, app.chosenFrequency);
-  const balance = packageBalance(pkg);
-  const startDate = app.activeRepaymentStartDate ?? app.createdAt;
-  const periods = planPeriods({
-    price: balance,
-    perPayment: cadence.amount,
-    frequency: app.chosenFrequency,
-    startDate,
-    paidIndices: app.paidPeriodIndices,
-  });
-  const amountPaid = periods.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
-  const health = paymentHealth({
-    price: balance,
-    amountPaid,
-    perPayment: cadence.amount,
-    frequency: app.chosenFrequency,
-    startDate,
-  });
-  const freqMeta = SOLO_FREQUENCIES[app.chosenFrequency];
+  const freqMeta = SOLO_FREQUENCIES[plan.frequency];
   const arrears = isArrears(health.status);
-  const waMessage = `Hi OCare Phinas! I just paid ${naira(cadence.amount)} for my Solar Plan (${app.reference}). Please find my screenshot attached.`;
+  const amountPaid = plan.amountAllocated;
+  const balance = plan.productPrice;
+  const waMessage = `Hi OCare Phinas! I just paid ${naira(plan.perPayment)} for my Solar Plan (${reference}). Please find my screenshot attached.`;
 
   return (
     <div>
       <h2 className="text-body font-semibold mb-3">Repayment</h2>
       <div className={cn("rounded-2xl border bg-card p-5", arrears && (health.status === "overdue" ? "border-destructive/40" : "border-warning/50"))}>
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <Badge variant={app.status === "completed" ? "secondary" : "default"} className="text-micro">
-            {app.status === "completed" ? "Fully paid" : `${naira(cadence.amount)}${freqMeta.per}`}
+          <Badge variant={status === "completed" ? "secondary" : "default"} className="text-micro">
+            {status === "completed" ? "Fully paid" : `${naira(plan.perPayment)}${freqMeta.per}`}
           </Badge>
           {arrears && (
             <Badge variant={HEALTH_META[health.status].badge} className="text-micro gap-1">
@@ -309,7 +330,7 @@ function RepaymentSummary({
           <span>{Math.min(100, (amountPaid / balance) * 100).toFixed(0)}%</span>
         </div>
 
-        {app.status !== "completed" && (
+        {status !== "completed" && (
           <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
             <p className="text-caption text-muted-foreground flex items-center gap-1.5">
               <CalendarClock className="size-3.5" />
@@ -326,7 +347,7 @@ function RepaymentSummary({
                 arrears && health.status === "overdue" ? "bg-destructive hover:bg-destructive/90" : "bg-[#25D366] hover:bg-[#1eb85a]",
               )}
             >
-              Pay {naira(arrears ? health.arrears : cadence.amount)} now
+              Pay {naira(arrears ? health.arrears : plan.perPayment)} now
             </a>
           </div>
         )}

@@ -31,3 +31,25 @@ export async function uploadToCloudinary(file: File, folder: UploadFolder = "pro
   }
   return data.secure_url as string;
 }
+
+/** Upload a solar KYC document (ID / utility bill) straight to Cloudinary
+ *  using a customer-issued signature (see /api/solar/cloudinary-signature). */
+export async function uploadSolarDocument(file: File): Promise<string> {
+  const sig = await api.post<CloudinarySignature>("/api/solar/cloudinary-signature");
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("api_key", sig.apiKey);
+  fd.append("timestamp", String(sig.timestamp));
+  fd.append("folder", sig.folder);
+  fd.append("signature", sig.signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
+    method: "POST",
+    body: fd,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.secure_url) {
+    throw new Error(data?.error?.message ?? "Document upload failed.");
+  }
+  return data.secure_url as string;
+}

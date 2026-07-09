@@ -2,12 +2,14 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, MapPin, MessageCircle, Phone, ShoppingBag } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Mail, MapPin, MessageCircle, Phone, ShoppingBag, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { toast } from "@/store/toastStore";
 import { mapApiOrder, PLAN_META, type ApiOrder, type Order } from "@/lib/orders";
 import { waLink } from "@/lib/whatsapp";
 import { StatusManager } from "./status-manager";
@@ -19,8 +21,10 @@ interface PageProps {
 
 export default function AdminOrderDetailPage({ params }: PageProps) {
   const { id } = use(params);
+  const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     api
@@ -28,6 +32,21 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
       .then((d) => setOrder(mapApiOrder(d.order)))
       .catch(() => setError(true));
   }, [id]);
+
+  async function deleteOrder() {
+    if (!order) return;
+    if (!confirm(`Delete order ${order.reference}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api.del(`/api/admin/orders/${order.id}`);
+      toast.success(`${order.reference} deleted.`, "Order deleted");
+      router.replace("/admin/orders");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't delete the order.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (error) {
     return (
@@ -148,9 +167,14 @@ export default function AdminOrderDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <Link href="/admin/orders" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 -ml-2")}>
-        <ArrowLeft className="size-4" /> All orders
-      </Link>
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/admin/orders" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 -ml-2")}>
+          <ArrowLeft className="size-4" /> All orders
+        </Link>
+        <Button variant="destructive" size="sm" className="gap-1.5" onClick={deleteOrder} disabled={deleting}>
+          <Trash2 className="size-3.5" /> {deleting ? "Deleting…" : "Delete order"}
+        </Button>
+      </div>
 
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>

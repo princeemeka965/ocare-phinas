@@ -1,25 +1,17 @@
 /* ------------------------------------------------------------------ *
  * Solar Pay Small Small — "Solar Power Flex Plan"                      *
  * ------------------------------------------------------------------ *
- * See ocare-phinas-solar-plan-addendum.md. A distinct plan type from   *
- * Solo/Group: gated by a KYC application + admin approval, a           *
- * non-refundable registration fee, a flat initial deposit that         *
- * triggers installation scheduling, then an ongoing balance            *
- * repayment on a fixed daily/weekly/monthly cadence (reusing the same  *
- * payment-health.ts schedule engine as Solo plans).                    *
- *                                                                      *
- * FRONTEND SIMULATION ONLY — no backend/API calls. All state lives in  *
- * src/store/solarStore.ts (persisted client-side), standing in for     *
- * `solar_applications` / `solar_packages` until Phase 3 wires this up  *
- * to Supabase.                                                         *
+ * Pure display helpers/constants shared by the customer and admin      *
+ * solar pages. Row types live in src/lib/db/types.ts (SolarPackage,     *
+ * SolarApplication, SolarInstallation); the lifecycle itself lives in   *
+ * src/lib/server/solar-lifecycle.ts. See ocare-phinas-solar-plan-       *
+ * addendum.md for the full design.                                     *
  * ------------------------------------------------------------------ */
 
-import type { SoloFrequency } from "./pay-small-small";
+import type { PlanFrequency, SolarApplicationStatus, SolarIdType, SolarPackage } from "@/lib/db/types";
 
 /** Solar reuses the same three cadences as Solo, but with fixed (not customer-chosen) amounts. */
-export type SolarFrequency = SoloFrequency;
-
-export type SolarIdType = "nin" | "drivers_license" | "voters_card" | "passport";
+export type SolarFrequency = PlanFrequency;
 
 export const SOLAR_ID_TYPES: { value: SolarIdType; label: string }[] = [
   { value: "nin", label: "National ID (NIN)" },
@@ -28,58 +20,10 @@ export const SOLAR_ID_TYPES: { value: SolarIdType; label: string }[] = [
   { value: "passport", label: "International Passport" },
 ];
 
-export interface SolarCadenceOption {
-  frequency: SolarFrequency;
-  /** Fixed amount per period for this cadence — not customer-chosen. */
-  amount: number;
-}
-
-export interface SolarPackage {
-  id: string;
-  name: string;
-  description: string;
-  /** Non-refundable, paid before review even begins. Not part of the package price. */
-  registrationFee: number;
-  /** Flat deposit that triggers installation once confirmed. */
-  initialDeposit: number;
-  /** Total price of the solar system — the balance is whatever remains after the deposit. */
-  totalAmount: number;
-  cadenceOptions: SolarCadenceOption[];
-  active: boolean;
-}
-
 /** Balance remaining after the deposit — derived from the package price, never independently set. */
 export function packageBalance(pkg: SolarPackage): number {
   return Math.max(0, pkg.totalAmount - pkg.initialDeposit);
 }
-
-export const MOCK_SOLAR_PACKAGES: SolarPackage[] = [
-  {
-    id: "solar-flex-1",
-    name: "Solar Power Flex Plan",
-    description:
-      "A complete solar power system, professionally installed at your home or business — pay a small deposit up front, then clear the balance on a pace that suits you.",
-    registrationFee: 5_000,
-    initialDeposit: 50_000,
-    totalAmount: 850_000,
-    cadenceOptions: [
-      { frequency: "daily", amount: 2_000 },
-      { frequency: "weekly", amount: 15_000 },
-      { frequency: "monthly", amount: 60_000 },
-    ],
-    active: true,
-  },
-];
-
-export type SolarApplicationStatus =
-  | "under_review"
-  | "not_approved"
-  | "approved_awaiting_deposit"
-  | "installation_processing"
-  | "installation_scheduled"
-  | "active_repayment"
-  | "completed"
-  | "defaulted";
 
 export type SolarBadgeVariant = "default" | "success" | "warning" | "destructive" | "secondary";
 
@@ -139,66 +83,12 @@ export const SOLAR_STATUS_FLOW: SolarApplicationStatus[] = [
   "completed",
 ];
 
-export interface SolarInstallation {
-  scheduledDate: string | null;
-  /** "HH:mm" 24-hour. */
-  scheduledTime: string | null;
-  scheduledBy: string | null;
-  scheduledAt: string | null;
-  completedAt: string | null;
-  notes: string | null;
-}
-
-export interface SolarApplication {
-  id: string;
-  reference: string;
-  customerId: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  packageId: string;
-
-  /* KYC — name/email/phone are read from the account, never re-collected here. */
-  address: string;
-  idType: SolarIdType;
-  idDocumentName: string | null;
-  utilityBillName: string | null;
-  employmentDetails: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-
-  status: SolarApplicationStatus;
-  rejectionReason: string | null;
-  reviewedBy: string | null;
-  reviewedAt: string | null;
-
-  registrationFeePaidAt: string;
-  chosenFrequency: SolarFrequency;
-
-  /** Customer says they've transferred the deposit — awaiting admin confirmation. */
-  depositSubmittedAt: string | null;
-  /** Admin has confirmed the deposit on their bank statement — this is what unlocks installation. */
-  depositPaidAt: string | null;
-  installation: SolarInstallation;
-
-  /** = installation.completedAt — the balance schedule's start date. */
-  activeRepaymentStartDate: string | null;
-  /** Periods an admin has confirmed on the balance repayment schedule. */
-  paidPeriodIndices: number[];
-
-  createdAt: string;
-}
-
 /** The cadence option a chosen frequency resolves to for a given package. */
-export function cadenceFor(pkg: SolarPackage, frequency: SolarFrequency): SolarCadenceOption {
+export function cadenceFor(pkg: SolarPackage, frequency: SolarFrequency) {
   return pkg.cadenceOptions.find((c) => c.frequency === frequency) ?? pkg.cadenceOptions[0];
 }
 
 /** Total scheduled periods to clear a package's balance at a given cadence. */
 export function totalBalancePeriods(pkg: SolarPackage, frequency: SolarFrequency): number {
   return Math.ceil(packageBalance(pkg) / cadenceFor(pkg, frequency).amount);
-}
-
-export function nextSolarReference(): string {
-  return `SOL-${Date.now().toString().slice(-6)}`;
 }

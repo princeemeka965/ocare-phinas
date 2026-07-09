@@ -19,11 +19,11 @@ import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/userStore";
-import { useSolarStore } from "@/store/solarStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES, type SoloFrequency } from "@/lib/pay-small-small";
-import { HEALTH_META, arrearsSummary, isArrears, paymentHealth, planPeriods, type PaymentHealth } from "@/lib/payment-health";
-import { SOLAR_STATUS_META, cadenceFor, packageBalance } from "@/lib/solar";
+import { HEALTH_META, arrearsSummary, isArrears, type PaymentHealth } from "@/lib/payment-health";
+import { SOLAR_STATUS_META } from "@/lib/solar";
+import type { Plan, SolarApplication, SolarPackage } from "@/lib/db/types";
 import { Sun } from "lucide-react";
 
 type PlanType = "solo" | "group" | "outright";
@@ -87,31 +87,27 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function SolarPlanCard({ userId }: { userId: string }) {
-  const app = useSolarStore((s) => s.applications.find((a) => a.customerId === userId));
-  const pkg = useSolarStore((s) => (app ? s.packages.find((p) => p.id === app.packageId) : undefined));
-  if (!app) return null;
+interface SolarPlanData {
+  application: SolarApplication;
+  package: SolarPackage | null;
+  plan: Plan | null;
+  health: PaymentHealth | null;
+}
+
+function SolarPlanCard({ data }: { data: SolarPlanData | null }) {
+  if (!data) return null;
+  const { application: app, package: pkg, plan, health } = data;
 
   const meta = SOLAR_STATUS_META[app.status];
   const inRepayment = app.status === "active_repayment" || app.status === "completed";
   let progress = 0;
   let subtitle = meta.description;
 
-  if (inRepayment && pkg) {
-    const cadence = cadenceFor(pkg, app.chosenFrequency);
-    const balance = packageBalance(pkg);
-    const startDate = app.activeRepaymentStartDate ?? app.createdAt;
-    const periods = planPeriods({
-      price: balance,
-      perPayment: cadence.amount,
-      frequency: app.chosenFrequency,
-      startDate,
-      paidIndices: app.paidPeriodIndices,
-    });
-    const amountPaid = periods.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
-    progress = Math.min(100, (amountPaid / balance) * 100);
-    const health = paymentHealth({ price: balance, amountPaid, perPayment: cadence.amount, frequency: app.chosenFrequency, startDate });
-    subtitle = isArrears(health.status) ? `${HEALTH_META[health.status].label} — ${naira(health.arrears)}` : `${naira(amountPaid)} of ${naira(balance)} paid`;
+  if (inRepayment && plan && health) {
+    progress = Math.min(100, (plan.amountAllocated / plan.productPrice) * 100);
+    subtitle = isArrears(health.status)
+      ? `${HEALTH_META[health.status].label} — ${naira(health.arrears)}`
+      : `${naira(plan.amountAllocated)} of ${naira(plan.productPrice)} paid`;
   }
 
   return (
@@ -145,6 +141,7 @@ export function MyPlanBoard() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
+  const [solar, setSolar] = useState<SolarPlanData | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -152,6 +149,10 @@ export function MyPlanBoard() {
     api.get<{ wallet: WalletData }>("/api/me/wallet").then((d) => setWallet(d.wallet)).catch(() => {});
     api.get<{ contributions: Contribution[] }>("/api/me/contributions").then((d) => setContributions(d.contributions)).catch(() => {});
     api.get<{ settings: PublicSettings }>("/api/settings").then((d) => setSettings(d.settings)).catch(() => {});
+    api
+      .get<{ application: SolarApplication | null; package: SolarPackage | null; plan: Plan | null; health: PaymentHealth | null }>("/api/solar/application")
+      .then((d) => setSolar(d.application ? { application: d.application, package: d.package, plan: d.plan, health: d.health } : null))
+      .catch(() => {});
   }, [user]);
 
   if (!user) {
@@ -265,7 +266,7 @@ export function MyPlanBoard() {
         </div>
 
         {/* Solar plan (separate flow — KYC-gated, its own status machine) */}
-        <SolarPlanCard userId={user.id} />
+        <SolarPlanCard data={solar} />
 
         {/* Active plans */}
         <h2 className="text-body font-semibold mb-3">Your purchases</h2>

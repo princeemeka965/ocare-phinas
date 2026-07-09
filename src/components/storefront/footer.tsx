@@ -26,8 +26,10 @@ const pssLinks = [
   { label: "Start a Solo Plan", href: "/pay-small-small/solo" },
   { label: "Join a Group", href: "/pay-small-small/join" },
   { label: "My Plan", href: "/pay-small-small/my-plan" },
+  { label: "Solar Pay Small Small", href: "/solar" },
   { label: "Solo Plan Terms", href: "/pay-small-small/solo-terms" },
   { label: "Group Plan Terms", href: "/pay-small-small/group-terms" },
+  { label: "Solar Plan Terms", href: "/solar/terms" },
 ];
 
 

@@ -1,22 +1,37 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sun, Wrench, CalendarClock, CheckCircle2, ArrowRight, Clock } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { useUserStore } from "@/store/userStore";
-import { useSolarStore } from "@/store/solarStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import type { SolarApplication, SolarInstallation } from "@/lib/db/types";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
 }
 
+interface ApplicationData {
+  application: SolarApplication;
+  installation: SolarInstallation | null;
+}
+
 export default function SolarInstallationStatusPage() {
   const user = useUserStore((s) => s.user);
-  const applications = useSolarStore((s) => s.applications);
+  const [data, setData] = useState<ApplicationData | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<ApplicationData>("/api/solar/application")
+      .then((d) => setData(d.application ? d : null))
+      .catch(() => setData(null));
+  }, [user]);
 
   if (!user) {
     return (
@@ -27,9 +42,15 @@ export default function SolarInstallationStatusPage() {
     );
   }
 
-  const app = applications.find((a) => a.customerId === user.id);
+  if (data === undefined) {
+    return (
+      <div className="py-16 sm:py-20">
+        <Container className="max-w-md text-center text-body-sm text-muted-foreground">Loading…</Container>
+      </div>
+    );
+  }
 
-  if (!app) {
+  if (!data) {
     return (
       <div className="py-16 sm:py-20">
         <Container className="max-w-md text-center">
@@ -46,9 +67,9 @@ export default function SolarInstallationStatusPage() {
     );
   }
 
-  const { installation } = app;
-  const isInstalled = !!installation.completedAt;
-  const isScheduled = !!installation.scheduledDate && !isInstalled;
+  const { application: app, installation } = data;
+  const isInstalled = !!installation?.completedAt;
+  const isScheduled = !!installation?.scheduledDate && !isInstalled;
   const isAwaiting =
     !isScheduled && !isInstalled && ["under_review", "approved_awaiting_deposit", "installation_processing"].includes(app.status);
 
@@ -73,7 +94,7 @@ export default function SolarInstallationStatusPage() {
 
           {isInstalled ? (
             <>
-              <h1 className="text-h2 font-bold mb-2">Installed on {formatDate(installation.completedAt!)}</h1>
+              <h1 className="text-h2 font-bold mb-2">Installed on {formatDate(installation!.completedAt!)}</h1>
               <p className="text-body-sm text-muted-foreground mb-6">
                 Your solar system is live. Keep up your repayment schedule to stay on track.
               </p>
@@ -87,14 +108,14 @@ export default function SolarInstallationStatusPage() {
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 mb-6 text-left">
                 <div className="flex justify-between text-body-sm mb-1.5">
                   <span className="text-muted-foreground">Date</span>
-                  <span className="font-semibold">{formatDate(installation.scheduledDate!)}</span>
+                  <span className="font-semibold">{formatDate(installation!.scheduledDate!)}</span>
                 </div>
                 <div className="flex justify-between text-body-sm">
                   <span className="text-muted-foreground">Time</span>
-                  <span className="font-semibold">{installation.scheduledTime}</span>
+                  <span className="font-semibold">{installation!.scheduledTime}</span>
                 </div>
-                {installation.notes && (
-                  <p className="text-caption text-muted-foreground mt-3 pt-3 border-t border-border/60">{installation.notes}</p>
+                {installation!.notes && (
+                  <p className="text-caption text-muted-foreground mt-3 pt-3 border-t border-border/60">{installation!.notes}</p>
                 )}
               </div>
               <p className="text-caption text-muted-foreground">Please ensure someone is available at the installation address on this date.</p>

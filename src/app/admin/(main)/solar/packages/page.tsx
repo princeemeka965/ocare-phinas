@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sun, Plus, Save, Trash2, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
-import { useSolarStore } from "@/store/solarStore";
 import { naira, SOLO_FREQUENCIES } from "@/lib/pay-small-small";
-import { packageBalance, type SolarFrequency, type SolarPackage } from "@/lib/solar";
+import { packageBalance } from "@/lib/solar";
+import type { PlanFrequency, SolarPackage } from "@/lib/db/types";
 
-const CADENCE_ORDER: SolarFrequency[] = ["daily", "weekly", "monthly"];
+const CADENCE_ORDER: PlanFrequency[] = ["daily", "weekly", "monthly"];
 
 interface FormState {
   name: string;
@@ -21,12 +22,12 @@ interface FormState {
   initialDeposit: number;
   /** Total price of the solar system — the balance repaid is whatever remains after the deposit. */
   totalAmount: number;
-  cadence: Record<SolarFrequency, number>;
+  cadence: Record<PlanFrequency, number>;
   active: boolean;
 }
 
 function toFormState(pkg?: SolarPackage): FormState {
-  const cadence = Object.fromEntries(CADENCE_ORDER.map((f) => [f, pkg?.cadenceOptions.find((c) => c.frequency === f)?.amount ?? 0])) as Record<SolarFrequency, number>;
+  const cadence = Object.fromEntries(CADENCE_ORDER.map((f) => [f, pkg?.cadenceOptions.find((c) => c.frequency === f)?.amount ?? 0])) as Record<PlanFrequency, number>;
   return {
     name: pkg?.name ?? "",
     description: pkg?.description ?? "",
@@ -102,7 +103,7 @@ function formValid(form: FormState): boolean {
   );
 }
 
-function toPackageInput(form: FormState): Omit<SolarPackage, "id"> {
+function toPackageInput(form: FormState): Omit<SolarPackage, "id" | "createdAt"> {
   return {
     name: form.name.trim(),
     description: form.description.trim(),
@@ -114,29 +115,38 @@ function toPackageInput(form: FormState): Omit<SolarPackage, "id"> {
   };
 }
 
-function PackageCard({ pkg }: { pkg: SolarPackage }) {
-  const updatePackage = useSolarStore((s) => s.updatePackage);
-  const removePackage = useSolarStore((s) => s.removePackage);
+function PackageCard({ pkg, onSaved, onRemoved }: { pkg: SolarPackage; onSaved: (pkg: SolarPackage) => void; onRemoved: (id: string) => void }) {
   const [form, setForm] = useState<FormState>(() => toFormState(pkg));
   const [saving, setSaving] = useState(false);
 
   const dirty = JSON.stringify(toPackageInput(form)) !== JSON.stringify(toPackageInput(toFormState(pkg)));
 
-  function save() {
+  async function save() {
     if (!formValid(form)) {
       toast.error("Fill in all amounts before saving — the total price must exceed the deposit.", "Incomplete");
       return;
     }
     setSaving(true);
-    updatePackage(pkg.id, toPackageInput(form));
-    toast.success(`${form.name} saved.`, "Updated");
-    setSaving(false);
+    try {
+      const { package: updated } = await api.patch<{ package: SolarPackage }>(`/api/admin/solar/packages/${pkg.id}`, toPackageInput(form));
+      onSaved(updated);
+      toast.success(`${form.name} saved.`, "Updated");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't save this package.", "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function remove() {
+  async function remove() {
     if (!confirm(`Delete "${pkg.name}"? This won't affect existing applications.`)) return;
-    removePackage(pkg.id);
-    toast.info("Package deleted.", "Removed");
+    try {
+      await api.del(`/api/admin/solar/packages/${pkg.id}`);
+      onRemoved(pkg.id);
+      toast.info("Package deleted.", "Removed");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't delete this package.", "Something went wrong");
+    }
   }
 
   return (
@@ -162,20 +172,32 @@ function PackageCard({ pkg }: { pkg: SolarPackage }) {
 }
 
 export default function AdminSolarPackagesPage() {
-  const packages = useSolarStore((s) => s.packages);
-  const addPackage = useSolarStore((s) => s.addPackage);
+  const [packages, setPackages] = useState<SolarPackage[] | null>(null);
   const [adding, setAdding] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState<FormState>(() => toFormState());
 
-  function createPackage() {
+  useEffect(() => {
+    api.get<{ packages: SolarPackage[] }>("/api/admin/solar/packages").then((d) => setPackages(d.packages)).catch(() => setPackages([]));
+  }, []);
+
+  async function createPackage() {
     if (!formValid(newForm)) {
       toast.error("Fill in all amounts before saving — the total price must exceed the deposit.", "Incomplete");
       return;
     }
-    addPackage(toPackageInput(newForm));
-    toast.success(`${newForm.name} added.`, "Saved");
-    setNewForm(toFormState());
-    setAdding(false);
+    setCreating(true);
+    try {
+      const { package: created } = await api.post<{ package: SolarPackage }>("/api/admin/solar/packages", toPackageInput(newForm));
+      setPackages((prev) => [...(prev ?? []), created]);
+      toast.success(`${newForm.name} added.`, "Saved");
+      setNewForm(toFormState());
+      setAdding(false);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't create this package.", "Something went wrong");
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -197,18 +219,25 @@ export default function AdminSolarPackagesPage() {
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5 space-y-4">
           <p className="text-body font-semibold">New package</p>
           <PackageFields form={newForm} onChange={setNewForm} />
-          <Button onClick={createPackage} className="gap-2"><Plus className="size-4" /> Add package</Button>
+          <Button onClick={createPackage} disabled={creating} className="gap-2"><Plus className="size-4" /> Add package</Button>
         </div>
       )}
 
-      {packages.length === 0 ? (
+      {packages === null ? (
+        <div className="rounded-2xl border border-dashed border-border p-12 text-center text-body-sm text-muted-foreground">Loading…</div>
+      ) : packages.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-12 text-center text-body-sm text-muted-foreground">
           No solar packages yet.
         </div>
       ) : (
         <div className="space-y-4">
           {packages.map((pkg) => (
-            <PackageCard key={pkg.id} pkg={pkg} />
+            <PackageCard
+              key={pkg.id}
+              pkg={pkg}
+              onSaved={(updated) => setPackages((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
+              onRemoved={(id) => setPackages((prev) => (prev ?? []).filter((p) => p.id !== id))}
+            />
           ))}
         </div>
       )}

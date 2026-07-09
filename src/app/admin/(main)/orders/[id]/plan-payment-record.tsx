@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { PlanActions } from "@/components/admin/plan-actions";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
@@ -257,6 +258,8 @@ export function PlanPaymentRecord({
         </div>
       )}
       </div>
+
+      <PlanActions plan={plan} onUpdated={() => window.location.reload()} onDeleted={() => window.location.reload()} />
 
       {children}
 
