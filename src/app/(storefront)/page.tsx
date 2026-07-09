@@ -184,12 +184,14 @@ function PaySmallSmallPromo() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link
                 href="/pay-small-small/solo"
+                prefetch={false}
                 className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg font-semibold text-body text-primary bg-white hover:bg-white/90 transition-colors"
               >
                 <User className="size-4" /> Start a Solo Plan
               </Link>
               <Link
                 href="/pay-small-small/join"
+                prefetch={false}
                 className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg font-semibold text-body text-white border border-white/30 bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-colors"
               >
                 <Users className="size-4" /> Join a Group
@@ -258,6 +260,7 @@ function CategoryTiles({
           </div>
           <Link
             href="/products"
+            prefetch={false}
             className={cn(
               buttonVariants({ variant: "ghost", size: "sm" }),
               "gap-1.5 text-primary hover:text-primary",
@@ -278,6 +281,7 @@ function CategoryTiles({
               <Link
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
+                prefetch={false}
                 className={cn(
                   "group flex flex-col items-center gap-3 rounded-2xl border p-4 sm:p-6 hover:-translate-y-1 hover:shadow-md transition-all duration-250",
                   isPreowned
@@ -337,6 +341,7 @@ function BrandStrip({ brands }: { brands: StripBrand[] }) {
           </div>
           <Link
             href="/brands"
+            prefetch={false}
             className={cn(
               buttonVariants({ variant: "ghost", size: "sm" }),
               "gap-1.5 text-primary hover:text-primary",
@@ -353,6 +358,7 @@ function BrandStrip({ brands }: { brands: StripBrand[] }) {
               <Link
                 key={brand.slug}
                 href={brandHref(brand.name)}
+                prefetch={false}
                 className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 aspect-square p-2.5"
               >
                 <div className="flex h-12 w-full sm:h-12 items-center justify-center">
@@ -400,6 +406,7 @@ function FeaturedSection({ hasFeatured, products }: { hasFeatured: boolean; prod
           {hasFeatured && (
             <Link
               href="/products"
+              prefetch={false}
               className={cn(
                 buttonVariants({ variant: "ghost", size: "sm" }),
                 "gap-1.5 text-primary hover:text-primary",
@@ -482,12 +489,14 @@ function TrustStrip() {
           <div className="flex gap-3 flex-shrink-0 flex-wrap justify-center">
             <Link
               href="/products"
+              prefetch={false}
               className={cn(buttonVariants({ size: "lg" }), "gap-2")}
             >
               Shop Now <ArrowRight className="size-4" />
             </Link>
             <Link
               href="/pay-small-small"
+              prefetch={false}
               className={cn(buttonVariants({ variant: "outline", size: "lg" }), "gap-2")}
             >
               <Wallet className="size-4" /> Pay Small Small

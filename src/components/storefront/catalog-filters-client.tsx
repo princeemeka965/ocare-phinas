@@ -84,7 +84,7 @@ export function CatalogNavLink({
 }) {
   const onClick = useNavClick(href);
   return (
-    <Link href={href} scroll={false} onClick={onClick} className={className}>
+    <Link href={href} prefetch={false} scroll={false} onClick={onClick} className={className}>
       {children}
     </Link>
   );
@@ -96,6 +96,7 @@ export function FilterChip({ label, href }: { label: string; href: string }) {
   return (
     <Link
       href={href}
+      prefetch={false}
       scroll={false}
       onClick={onClick}
       className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/30 bg-primary/10 text-caption text-primary font-medium hover:bg-primary/15 transition-colors"
@@ -140,6 +141,7 @@ function SortLink({ href, active, label }: { href: string; active: boolean; labe
   return (
     <Link
       href={href}
+      prefetch={false}
       scroll={false}
       onClick={onClick}
       className={cn(
@@ -168,6 +170,7 @@ export function FilterLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       scroll={false}
       onClick={onClick}
       className={cn(

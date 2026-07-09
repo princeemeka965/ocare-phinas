@@ -140,6 +140,9 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
     } else {
       orderStatus = "processing";
       if (product) await supabase.rpc("inc_product_stock", { p_id: product.id, delta: -1 });
+      // Goods just changed hands — that portion of the wallet balance is now
+      // spent (converted into a product), not sitting toward a future delivery.
+      if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: goodsTrigger });
     }
   }
 
@@ -151,6 +154,9 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
         await supabase.from("GroupMembership").delete().eq("groupId", plan.groupId).eq("customerId", plan.customerId);
         await supabase.rpc("inc_group_slots", { g_id: plan.groupId, delta: -plan.slots });
       }
+      // The delivery fee just paid off is also spent — nothing about this
+      // plan remains uncommitted or in progress.
+      if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: scheduleTotal - goodsTrigger });
     } else if (amountAllocated >= goodsTrigger) {
       // Goods delivered; the remaining delivery fee is paid off as balance.
       planStatus = "delivered";
@@ -163,4 +169,65 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
   }
 
   return { ok: true, amountAllocated, planStatus, orderStatus, awaitingSubstitution };
+}
+
+/**
+ * Reverse every money/stock/slot effect a Plan has accumulated, then delete
+ * it. Used by the admin "delete plan" and "delete order" actions — nothing
+ * else in the app ever undoes a confirmed payment.
+ *
+ * - Wallet: `amountAllocated` is exactly the running sum of every confirmed
+ *   period's `inc_wallet_total` credit, so reversing it is a single call —
+ *   no need to re-sum Transaction rows.
+ * - Stock: only "delivered"/"completed" plans ever reached the goods trigger
+ *   with stock available (the only branch that decremented it).
+ * - Group slot: only reversed if the plan hasn't completed — a completed
+ *   plan already freed its slot via this exact same call at confirm time,
+ *   and freeing it again would double-credit the group.
+ * - Transaction rows are kept for audit but detached (`planId` has no
+ *   `ON DELETE` clause, so it must be cleared before the Plan row can go).
+ * - Spent-on-products: mirrors whatever confirmPlanPeriod credited at the
+ *   delivered/completed transitions, recomputed from the same fields (solo/
+ *   group only — solar's deposit-driven spend is reversed separately in
+ *   revertSolarApplicationAfterPlanDeletion, since it needs the linked
+ *   SolarPackage, not just the Plan row).
+ */
+export async function reversePlan(plan: Plan): Promise<void> {
+  if (plan.amountAllocated > 0) {
+    const { data: wallet } = await supabase
+      .from("Wallet")
+      .select("*")
+      .eq("customerId", plan.customerId)
+      .maybeSingle<Wallet>();
+    if (wallet) {
+      await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: -plan.amountAllocated });
+
+      if (plan.type !== "solar" && (plan.status === "delivered" || plan.status === "completed")) {
+        const goodsTrigger = Math.round(plan.productPrice * (plan.type === "solo" ? 0.5 : 1));
+        const scheduleTotal = plan.productPrice + plan.deliveryFee;
+        const spent = plan.status === "completed" ? scheduleTotal : goodsTrigger;
+        await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: -spent });
+      }
+    }
+  }
+
+  if ((plan.status === "delivered" || plan.status === "completed") && plan.productId) {
+    await supabase.rpc("inc_product_stock", { p_id: plan.productId, delta: 1 });
+  }
+
+  if (plan.type === "group" && plan.groupId && plan.status !== "completed") {
+    const { data: membership } = await supabase
+      .from("GroupMembership")
+      .select("id,slotsHeld")
+      .eq("groupId", plan.groupId)
+      .eq("customerId", plan.customerId)
+      .maybeSingle<{ id: string; slotsHeld: number }>();
+    if (membership) {
+      await supabase.from("GroupMembership").delete().eq("id", membership.id);
+      await supabase.rpc("inc_group_slots", { g_id: plan.groupId, delta: -membership.slotsHeld });
+    }
+  }
+
+  await supabase.from("Transaction").update({ planId: null }).eq("planId", plan.id);
+  await supabase.from("Plan").delete().eq("id", plan.id);
 }

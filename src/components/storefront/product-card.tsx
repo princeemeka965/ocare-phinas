@@ -81,6 +81,7 @@ export function ProductCard({ product }: { product: ProductCardData }) {
       {/* Image area */}
       <Link
         href={`/products/${product.slug}`}
+        prefetch={false}
         className="block relative overflow-hidden"
         aria-label={`View ${product.name}`}
         tabIndex={-1}
@@ -140,7 +141,7 @@ export function ProductCard({ product }: { product: ProductCardData }) {
           <p className="text-micro text-muted-foreground font-medium uppercase tracking-wide">
             {product.brand}
           </p>
-          <Link href={`/products/${product.slug}`}>
+          <Link href={`/products/${product.slug}`} prefetch={false}>
             <h3 className="text-body-sm font-semibold leading-snug line-clamp-2 hover:text-primary transition-colors">
               {product.name}
             </h3>

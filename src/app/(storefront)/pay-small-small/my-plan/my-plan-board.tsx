@@ -22,6 +22,9 @@ import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
 import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES, type SoloFrequency } from "@/lib/pay-small-small";
 import { HEALTH_META, arrearsSummary, isArrears, type PaymentHealth } from "@/lib/payment-health";
+import { SOLAR_STATUS_META } from "@/lib/solar";
+import type { Plan, SolarApplication, SolarPackage } from "@/lib/db/types";
+import { Sun } from "lucide-react";
 
 type PlanType = "solo" | "group" | "outright";
 type PlanStatus = "active" | "processing" | "delivered" | "completed" | "awaiting_substitution";
@@ -84,12 +87,61 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
 }
 
+interface SolarPlanData {
+  application: SolarApplication;
+  package: SolarPackage | null;
+  plan: Plan | null;
+  health: PaymentHealth | null;
+}
+
+function SolarPlanCard({ data }: { data: SolarPlanData | null }) {
+  if (!data) return null;
+  const { application: app, package: pkg, plan, health } = data;
+
+  const meta = SOLAR_STATUS_META[app.status];
+  const inRepayment = app.status === "active_repayment" || app.status === "completed";
+  let progress = 0;
+  let subtitle = meta.description;
+
+  if (inRepayment && plan && health) {
+    progress = Math.min(100, (plan.amountAllocated / plan.productPrice) * 100);
+    subtitle = isArrears(health.status)
+      ? `${HEALTH_META[health.status].label} — ${naira(health.arrears)}`
+      : `${naira(plan.amountAllocated)} of ${naira(plan.productPrice)} paid`;
+  }
+
+  return (
+    <Link
+      href="/solar/application"
+      className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 mb-8 hover:border-primary/40 transition-colors"
+    >
+      <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 flex-shrink-0">
+        <Sun className="size-6 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <p className="text-body-sm font-semibold">{pkg?.name ?? "Solar Plan"}</p>
+          <Badge variant={meta.badge} className="text-micro">{meta.label}</Badge>
+        </div>
+        <p className="text-caption text-muted-foreground line-clamp-1">{subtitle}</p>
+        {inRepayment && (
+          <div className="relative h-1.5 rounded-full bg-muted overflow-hidden mt-2 max-w-xs">
+            <div className="h-full rounded-full" style={{ width: `${progress}%`, background: "linear-gradient(90deg, oklch(0.55 0.15 150), oklch(0.72 0.17 78))" }} />
+          </div>
+        )}
+      </div>
+      <ArrowRight className="size-5 text-muted-foreground flex-shrink-0" />
+    </Link>
+  );
+}
+
 export function MyPlanBoard() {
   const user = useUserStore((s) => s.user);
   const [plans, setPlans] = useState<ApiPlan[] | null>(null);
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
+  const [solar, setSolar] = useState<SolarPlanData | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -97,6 +149,10 @@ export function MyPlanBoard() {
     api.get<{ wallet: WalletData }>("/api/me/wallet").then((d) => setWallet(d.wallet)).catch(() => {});
     api.get<{ contributions: Contribution[] }>("/api/me/contributions").then((d) => setContributions(d.contributions)).catch(() => {});
     api.get<{ settings: PublicSettings }>("/api/settings").then((d) => setSettings(d.settings)).catch(() => {});
+    api
+      .get<{ application: SolarApplication | null; package: SolarPackage | null; plan: Plan | null; health: PaymentHealth | null }>("/api/solar/application")
+      .then((d) => setSolar(d.application ? { application: d.application, package: d.package, plan: d.plan, health: d.health } : null))
+      .catch(() => {});
   }, [user]);
 
   if (!user) {
@@ -208,6 +264,9 @@ export function MyPlanBoard() {
             </p>
           </div>
         </div>
+
+        {/* Solar plan (separate flow — KYC-gated, its own status machine) */}
+        <SolarPlanCard data={solar} />
 
         {/* Active plans */}
         <h2 className="text-body font-semibold mb-3">Your purchases</h2>

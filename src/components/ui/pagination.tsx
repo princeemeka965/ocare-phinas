@@ -74,6 +74,7 @@ export function Pagination({ page, pages, hrefFor, onPageChange, className }: Pa
         <Link
           key={label ?? target}
           href={hrefFor(target)}
+          prefetch={false}
           className={className}
           aria-label={label}
           aria-current={active ? "page" : undefined}

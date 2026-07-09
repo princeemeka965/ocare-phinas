@@ -26,8 +26,10 @@ const pssLinks = [
   { label: "Start a Solo Plan", href: "/pay-small-small/solo" },
   { label: "Join a Group", href: "/pay-small-small/join" },
   { label: "My Plan", href: "/pay-small-small/my-plan" },
+  { label: "Solar Pay Small Small", href: "/solar" },
   { label: "Solo Plan Terms", href: "/pay-small-small/solo-terms" },
   { label: "Group Plan Terms", href: "/pay-small-small/group-terms" },
+  { label: "Solar Plan Terms", href: "/solar/terms" },
 ];
 
 
@@ -39,7 +41,7 @@ export async function StorefrontFooter() {
         <div className="py-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand */}
           <div className="space-y-4 sm:col-span-2 lg:col-span-1">
-            <Link href="/" aria-label="OCare Phinas home">
+            <Link href="/" prefetch={false} aria-label="OCare Phinas home">
               <Logo className="h-9" />
             </Link>
             <p className="text-body-sm text-muted-foreground max-w-[22ch]">
@@ -75,6 +77,7 @@ export async function StorefrontFooter() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
+                    prefetch={false}
                     className="text-body-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {link.label}
@@ -95,6 +98,7 @@ export async function StorefrontFooter() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
+                    prefetch={false}
                     className="text-body-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {link.label}
@@ -112,6 +116,7 @@ export async function StorefrontFooter() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
+                    prefetch={false}
                     className="text-body-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {link.label}
@@ -145,24 +150,28 @@ export async function StorefrontFooter() {
           <div className="flex items-center gap-4">
             <Link
               href="/privacy"
+              prefetch={false}
               className="text-caption text-muted-foreground hover:text-foreground transition-colors"
             >
               Privacy Policy
             </Link>
             <Link
               href="/terms"
+              prefetch={false}
               className="text-caption text-muted-foreground hover:text-foreground transition-colors"
             >
               Terms of Service
             </Link>
             <Link
               href="/warranty"
+              prefetch={false}
               className="text-caption text-muted-foreground hover:text-foreground transition-colors"
             >
               Warranty Policy
             </Link>
             <Link
               href="/delivery"
+              prefetch={false}
               className="text-caption text-muted-foreground hover:text-foreground transition-colors"
             >
               Delivery Policy

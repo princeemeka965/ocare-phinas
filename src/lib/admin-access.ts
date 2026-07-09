@@ -13,7 +13,7 @@
 
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users, GitFork,
-  AlertTriangle, Settings, ShieldCheck, type LucideIcon,
+  AlertTriangle, Settings, ShieldCheck, Sun, BarChart3, type LucideIcon,
 } from "lucide-react";
 
 /** One grantable area of the admin. */
@@ -25,8 +25,10 @@ export type AdminPermission =
   | "customers"
   | "groups"
   | "arrears"
+  | "solar"
   | "settings"
-  | "team";
+  | "team"
+  | "reports";
 
 export interface PermissionMeta {
   label: string;
@@ -42,18 +44,20 @@ export const PERMISSION_META: Record<AdminPermission, PermissionMeta> = {
   customers: { label: "Customers", description: "View customers, block / unblock", icon: Users },
   groups: { label: "Groups", description: "Manage Pay Small Small groups", icon: GitFork },
   arrears: { label: "Arrears", description: "View missed & overdue payments", icon: AlertTriangle },
+  solar: { label: "Solar Plans", description: "Review KYC applications, deposits and installations", icon: Sun },
   settings: { label: "Settings", description: "Edit store settings", icon: Settings },
   team: { label: "Team & permissions", description: "Add sub-admins and assign privileges", icon: ShieldCheck },
+  reports: { label: "Reports", description: "Revenue, outstanding payments and wallet totals", icon: BarChart3 },
 };
 
 /** All permissions, in display order. */
 export const ADMIN_PERMISSIONS = Object.keys(PERMISSION_META) as AdminPermission[];
 
 /**
- * Permissions a super admin may grant to a sub-admin. "team" is excluded —
- * only the super admin manages the team and its permissions.
+ * Permissions a super admin may grant to a sub-admin. "team" and "reports"
+ * are excluded — only the super admin manages the team and sees reports.
  */
-export const ASSIGNABLE_PERMISSIONS = ADMIN_PERMISSIONS.filter((p) => p !== "team");
+export const ASSIGNABLE_PERMISSIONS = ADMIN_PERMISSIONS.filter((p) => p !== "team" && p !== "reports");
 
 export type AdminRole = "super" | "sub";
 
@@ -80,8 +84,10 @@ export const ROUTE_FOR_PERMISSION: Record<AdminPermission, string> = {
   customers: "/admin/customers",
   groups: "/admin/groups",
   arrears: "/admin/arrears",
+  solar: "/admin/solar",
   settings: "/admin/settings",
   team: "/admin/team",
+  reports: "/admin/reports",
 };
 
 /** Where to send an admin after sign-in: the dashboard if allowed, else their first granted area. */
@@ -101,8 +107,10 @@ export function permissionForPath(pathname: string): AdminPermission | null {
     { prefix: "/admin/customers", perm: "customers" },
     { prefix: "/admin/groups", perm: "groups" },
     { prefix: "/admin/arrears", perm: "arrears" },
+    { prefix: "/admin/solar", perm: "solar" },
     { prefix: "/admin/team", perm: "team" },
     { prefix: "/admin/settings", perm: "settings" },
+    { prefix: "/admin/reports", perm: "reports" },
   ];
   const match = map.find((m) => pathname === m.prefix || pathname.startsWith(`${m.prefix}/`));
   return match ? match.perm : null;

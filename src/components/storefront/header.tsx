@@ -15,6 +15,7 @@ import {
   Tag,
   RefreshCw,
   Sparkles,
+  Sun,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -33,6 +34,7 @@ const PRIMARY_NAV = [
   { label: "Shop All", href: "/products", icon: ShoppingBag },
   { label: "Shop by Brand", href: "/brands", icon: Tag },
   { label: "Pay Small Small", href: "/pay-small-small", icon: Wallet, highlight: true },
+  { label: "Solar Plans", href: "/solar", icon: Sun },
   { label: "Pre-owned", href: "/category/pre-owned", icon: RefreshCw },
 ];
 
@@ -109,6 +111,7 @@ export function StorefrontHeader() {
             {/* Left — logo */}
             <Link
               href="/"
+              prefetch={false}
               className="flex-shrink-0"
               aria-label="OCare Phinas — home"
             >
@@ -125,6 +128,7 @@ export function StorefrontHeader() {
               {/* Cart */}
               <Link
                 href="/cart"
+                prefetch={false}
                 aria-label={`Shopping cart — ${count} ${count === 1 ? "item" : "items"}`}
                 className={cn(
                   buttonVariants({ variant: "ghost", size: "icon-sm" }),
@@ -183,6 +187,14 @@ export function StorefrontHeader() {
                         <Wallet className="size-4" /> My Plan
                       </Link>
                       <Link
+                        href="/solar/application"
+                        role="menuitem"
+                        className="flex items-center gap-2 px-3 py-2 text-body-sm hover:bg-muted rounded-lg mx-1 transition-colors"
+                        onClick={() => setAccountOpen(false)}
+                      >
+                        <Sun className="size-4" /> My Solar Plan
+                      </Link>
+                      <Link
                         href="/profile"
                         role="menuitem"
                         className="flex items-center gap-2 px-3 py-2 text-body-sm hover:bg-muted rounded-lg mx-1 transition-colors"
@@ -208,12 +220,14 @@ export function StorefrontHeader() {
                 <div className="hidden lg:flex items-center gap-1 ml-1">
                   <Link
                     href="/login"
+                    prefetch={false}
                     className={buttonVariants({ variant: "ghost", size: "sm" })}
                   >
                     Log in
                   </Link>
                   <Link
                     href="/register"
+                    prefetch={false}
                     className={buttonVariants({ size: "sm" })}
                   >
                     Register
@@ -247,6 +261,7 @@ export function StorefrontHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-medium transition-colors",
                     item.highlight
@@ -311,6 +326,7 @@ export function StorefrontHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={cn(
                     "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm font-medium transition-colors",
                     item.highlight
@@ -339,6 +355,7 @@ export function StorefrontHeader() {
               </div>
               <Link
                 href="/orders"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
@@ -346,13 +363,23 @@ export function StorefrontHeader() {
               </Link>
               <Link
                 href="/pay-small-small/my-plan"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
                 <Wallet className="size-4 text-muted-foreground" /> My Plan
               </Link>
               <Link
+                href="/solar/application"
+                prefetch={false}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Sun className="size-4 text-muted-foreground" /> My Solar Plan
+              </Link>
+              <Link
                 href="/profile"
+                prefetch={false}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-body-sm hover:bg-muted transition-colors"
                 onClick={() => setMobileOpen(false)}
               >
@@ -373,6 +400,7 @@ export function StorefrontHeader() {
             <div className="space-y-2 pt-2">
               <Link
                 href="/register"
+                prefetch={false}
                 className={cn(buttonVariants(), "w-full justify-center")}
                 onClick={() => setMobileOpen(false)}
               >
@@ -380,6 +408,7 @@ export function StorefrontHeader() {
               </Link>
               <Link
                 href="/login"
+                prefetch={false}
                 className={cn(
                   buttonVariants({ variant: "outline" }),
                   "w-full justify-center",
