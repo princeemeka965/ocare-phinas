@@ -140,6 +140,9 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
     } else {
       orderStatus = "processing";
       if (product) await supabase.rpc("inc_product_stock", { p_id: product.id, delta: -1 });
+      // Goods just changed hands — that portion of the wallet balance is now
+      // spent (converted into a product), not sitting toward a future delivery.
+      if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: goodsTrigger });
     }
   }
 
@@ -151,6 +154,9 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
         await supabase.from("GroupMembership").delete().eq("groupId", plan.groupId).eq("customerId", plan.customerId);
         await supabase.rpc("inc_group_slots", { g_id: plan.groupId, delta: -plan.slots });
       }
+      // The delivery fee just paid off is also spent — nothing about this
+      // plan remains uncommitted or in progress.
+      if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: scheduleTotal - goodsTrigger });
     } else if (amountAllocated >= goodsTrigger) {
       // Goods delivered; the remaining delivery fee is paid off as balance.
       planStatus = "delivered";
@@ -180,6 +186,11 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
  *   and freeing it again would double-credit the group.
  * - Transaction rows are kept for audit but detached (`planId` has no
  *   `ON DELETE` clause, so it must be cleared before the Plan row can go).
+ * - Spent-on-products: mirrors whatever confirmPlanPeriod credited at the
+ *   delivered/completed transitions, recomputed from the same fields (solo/
+ *   group only — solar's deposit-driven spend is reversed separately in
+ *   revertSolarApplicationAfterPlanDeletion, since it needs the linked
+ *   SolarPackage, not just the Plan row).
  */
 export async function reversePlan(plan: Plan): Promise<void> {
   if (plan.amountAllocated > 0) {
@@ -190,6 +201,13 @@ export async function reversePlan(plan: Plan): Promise<void> {
       .maybeSingle<Wallet>();
     if (wallet) {
       await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: -plan.amountAllocated });
+
+      if (plan.type !== "solar" && (plan.status === "delivered" || plan.status === "completed")) {
+        const goodsTrigger = Math.round(plan.productPrice * (plan.type === "solo" ? 0.5 : 1));
+        const scheduleTotal = plan.productPrice + plan.deliveryFee;
+        const spent = plan.status === "completed" ? scheduleTotal : goodsTrigger;
+        await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: -spent });
+      }
     }
   }
 

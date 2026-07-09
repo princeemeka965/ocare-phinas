@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { requireAdmin, jsonError } from "@/lib/auth/guards";
 import { planHealthFrom, PAYABLE_PLAN_STATUSES } from "@/lib/server/arrears";
+import { ONGOING_PLAN_STATUSES } from "@/lib/pay-small-small";
+import { committedAmount, solarAwaitingInstallDeposits } from "@/lib/server/wallet-breakdown";
 import type { Customer, Order, OrderItem, Plan, PlanPayment, Wallet } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -37,6 +39,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const orders = [...customer.orders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
+  // Available balance — see wallet-breakdown.ts. Normally ₦0; nonzero flags
+  // the wallet ledger drifting from what this customer's live plans back.
+  const openStatuses: readonly string[] = [...ONGOING_PLAN_STATUSES, "awaiting_installation"];
+  const committedTotal =
+    customer.plans.filter((p) => openStatuses.includes(p.status)).reduce((s, p) => s + committedAmount(p), 0) +
+    (await solarAwaitingInstallDeposits(customer.id));
+  const available = (customer.wallet?.totalBalance ?? 0) - (customer.wallet?.spentOnProducts ?? 0) - committedTotal;
+
   const plans = customer.plans.map((p) => {
     const payable = (PAYABLE_PLAN_STATUSES as readonly string[]).includes(p.status);
     return {
@@ -63,7 +73,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       joined: customer.createdAt,
       wallet: {
         total: customer.wallet?.totalBalance ?? 0,
-        available: customer.wallet?.availableBalance ?? 0,
+        available,
         spentOnProducts: customer.wallet?.spentOnProducts ?? 0,
       },
       plans,

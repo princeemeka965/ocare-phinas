@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/guards";
 import { plansInArrears } from "@/lib/server/arrears";
 import { arrearsSummary } from "@/lib/payment-health";
 import { ONGOING_PLAN_STATUSES } from "@/lib/pay-small-small";
+import { committedAmount, solarAwaitingInstallDeposits } from "@/lib/server/wallet-breakdown";
 import type { Order, Plan, PlanType, Transaction, Wallet } from "@/lib/db/types";
 
 const PLAN_TYPES: PlanType[] = ["outright", "solo", "group", "solar"];
@@ -19,8 +20,8 @@ function startOfMonth(): string {
 }
 
 type DepositTxn = Pick<Transaction, "amount" | "createdAt"> & { plan: { type: PlanType } | { type: PlanType }[] | null };
-type OngoingPlan = Pick<Plan, "type" | "productPrice" | "deliveryFee" | "amountAllocated">;
-type WalletTotals = Pick<Wallet, "totalBalance" | "availableBalance" | "spentOnProducts">;
+type OngoingPlan = Pick<Plan, "type" | "status" | "productPrice" | "deliveryFee" | "amountAllocated">;
+type WalletTotals = Pick<Wallet, "totalBalance" | "spentOnProducts">;
 
 // GET /api/admin/reports — superadmin-only overview: revenue realized,
 // outstanding/expected payments, and wallet & registration-fee totals.
@@ -32,7 +33,7 @@ export async function GET() {
 
   const monthStart = startOfMonth();
 
-  const [outrightOrdersRes, depositTxnsRes, ongoingPlansRes, arrears, walletsRes, regFeesRes] = await Promise.all([
+  const [outrightOrdersRes, depositTxnsRes, ongoingPlansRes, arrears, walletsRes, regFeesRes, solarAwaitingDeposits] = await Promise.all([
     supabase
       .from("Order")
       .select("total,createdAt")
@@ -41,11 +42,12 @@ export async function GET() {
     supabase.from("Transaction").select("amount,createdAt,plan:Plan(type)").eq("type", "deposit"),
     supabase
       .from("Plan")
-      .select("type,productPrice,deliveryFee,amountAllocated")
+      .select("type,status,productPrice,deliveryFee,amountAllocated")
       .in("status", [...ONGOING_PLAN_STATUSES, "awaiting_installation"]),
     plansInArrears(),
-    supabase.from("Wallet").select("totalBalance,availableBalance,spentOnProducts"),
+    supabase.from("Wallet").select("totalBalance,spentOnProducts"),
     supabase.from("Transaction").select("amount").eq("type", "registration_fee"),
+    solarAwaitingInstallDeposits(),
   ]);
 
   const outrightOrders = unwrap(outrightOrdersRes) as Pick<Order, "total" | "createdAt">[];
@@ -85,12 +87,21 @@ export async function GET() {
   const walletTotals = wallets.reduce(
     (acc, w) => ({
       totalBalance: acc.totalBalance + w.totalBalance,
-      availableBalance: acc.availableBalance + w.availableBalance,
       spentOnProducts: acc.spentOnProducts + w.spentOnProducts,
     }),
-    { totalBalance: 0, availableBalance: 0, spentOnProducts: 0 },
+    { totalBalance: 0, spentOnProducts: 0 },
   );
   const registrationFeesTotal = regFees.reduce((s, t) => s + t.amount, 0);
+
+  // Available balance — uncommitted wallet cash. There's no top-up/overpayment
+  // feature, so under normal operation every naira is either still committed
+  // to an open plan or already reflected in spentOnProducts, and this reads
+  // ₦0. A nonzero figure here means the wallet ledger has drifted from what
+  // the live Plan rows actually back — almost always a manual admin override
+  // (PlanActions lets an admin edit status/amountAllocated directly, with no
+  // automatic ledger sync) — so treat it as a reconciliation flag, not cash.
+  const committedTotal = ongoingPlans.reduce((s, p) => s + committedAmount(p), 0) + solarAwaitingDeposits;
+  const availableBalance = walletTotals.totalBalance - walletTotals.spentOnProducts - committedTotal;
 
   return NextResponse.json({
     revenue: {
@@ -106,6 +117,7 @@ export async function GET() {
     },
     wallets: {
       ...walletTotals,
+      availableBalance,
       registrationFeesTotal,
     },
   });

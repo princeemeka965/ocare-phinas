@@ -21,8 +21,6 @@ interface ReportsData {
   };
   wallets: {
     totalBalance: number;
-    availableBalance: number;
-    spentOnProducts: number;
     registrationFeesTotal: number;
   };
 }
@@ -121,8 +119,6 @@ export function ReportsBoard() {
         <h2 className="text-body font-semibold text-muted-foreground uppercase tracking-wide text-micro">Wallet &amp; registration fees</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <StatCard label="Total wallet balance" value={naira(wallets.totalBalance)} sub="Sum across every customer wallet" icon={WalletIcon} color="text-primary" bg="bg-primary/10" />
-          <StatCard label="Available balance" value={naira(wallets.availableBalance)} sub="Not yet allocated to a plan" icon={WalletIcon} color="text-muted-foreground" bg="bg-muted" />
-          <StatCard label="Spent on products" value={naira(wallets.spentOnProducts)} sub="Converted into goods" icon={ShoppingCart} color="text-muted-foreground" bg="bg-muted" />
           <StatCard label="Registration fees collected" value={naira(wallets.registrationFeesTotal)} sub="Solar KYC fees — never reversible" icon={Sun} color="text-accent-foreground" bg="bg-accent/15" />
         </div>
       </section>

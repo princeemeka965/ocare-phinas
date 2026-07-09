@@ -102,7 +102,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (plan.type === "solar") {
     if (!plan.solarApplicationId) return jsonError(500, "This solar plan has no linked application.");
     await reversePlan(plan);
-    await revertSolarApplicationAfterPlanDeletion(plan.solarApplicationId);
+    await revertSolarApplicationAfterPlanDeletion(plan.solarApplicationId, plan);
   } else {
     const { data: order } = await supabase
       .from("Order")

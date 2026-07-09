@@ -470,6 +470,17 @@ export async function completeSolarInstallation(
   const now = new Date().toISOString();
   await supabase.from("SolarInstallation").update({ completedAt: now }).eq("applicationId", applicationId);
 
+  // The panels just changed hands — the deposit (already in totalBalance
+  // since confirmSolarDeposit) converts from "committed, awaiting install"
+  // to spent. Everything paid from here on (confirmSolarPeriod) is a
+  // straight loan repayment on equipment already installed, so it's credited
+  // as spent immediately too, not held as a separate "committed" bucket.
+  const { data: pkg } = await supabase.from("SolarPackage").select("*").eq("id", application.packageId).maybeSingle<SolarPackage>();
+  if (pkg) {
+    const { data: wallet } = await supabase.from("Wallet").select("*").eq("customerId", application.customerId).maybeSingle<Wallet>();
+    if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: pkg.initialDeposit });
+  }
+
   // Repayment period #1 is due "now" — planPeriods() always treats startDate as day 1.
   const updatedPlan = unwrap(
     await supabase.from("Plan").update({ status: "active", startDate: now }).eq("id", plan.id).select("*").single(),
@@ -536,6 +547,10 @@ export async function confirmSolarPeriod(
       { walletId: wallet.id, type: "allocation", amount: period.amount, planId: plan.id, approved: true },
     ]);
     await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: period.amount });
+    // Installation already happened (completeSolarInstallation ran before repayment
+    // could start) — every repayment period is paying off equipment already
+    // received, so it's spent the moment it's confirmed, not "committed".
+    await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: period.amount });
   }
 
   const complete = amountAllocated >= plan.productPrice;
@@ -555,8 +570,38 @@ export async function confirmSolarPeriod(
  * admin can redo confirmSolarDeposit from a clean state. The registration
  * fee is untouched — it was never added to wallet totalBalance and is
  * intentionally never reversible.
+ *
+ * reversePlan already reversed `plan.amountAllocated` (the repayment periods)
+ * from totalBalance/spentOnProducts, but the initial deposit lives outside
+ * `amountAllocated` (it's booked in confirmSolarDeposit, before the plan even
+ * has a schedule) — so it needs its own reversal here, using the package this
+ * application points to.
  */
-export async function revertSolarApplicationAfterPlanDeletion(applicationId: string): Promise<void> {
+export async function revertSolarApplicationAfterPlanDeletion(applicationId: string, plan: Plan): Promise<void> {
+  const { data: application } = await supabase
+    .from("SolarApplication")
+    .select("*")
+    .eq("id", applicationId)
+    .maybeSingle<SolarApplication>();
+
+  if (application) {
+    const { data: pkg } = await supabase.from("SolarPackage").select("*").eq("id", application.packageId).maybeSingle<SolarPackage>();
+    if (pkg) {
+      const { data: wallet } = await supabase.from("Wallet").select("*").eq("customerId", application.customerId).maybeSingle<Wallet>();
+      if (wallet) {
+        await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: -pkg.initialDeposit });
+        // Installed panels stay installed — this mirrors reversePlan's "undo the
+        // ledger as if it never happened" behaviour, not a real repossession.
+        // Once installed, every naira (deposit + every confirmed repayment
+        // period) was credited as spent — reversePlan skips solar entirely for
+        // spentOnProducts, so both portions are reversed together here.
+        if (plan.status !== "awaiting_installation") {
+          await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: -(pkg.initialDeposit + plan.amountAllocated) });
+        }
+      }
+    }
+  }
+
   await supabase
     .from("SolarApplication")
     .update({ status: "approved_awaiting_deposit", depositSubmittedAt: null, depositPaidAt: null })
