@@ -183,6 +183,11 @@ export function PlanActions({
 
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 space-y-3">
             <p className="text-caption font-semibold flex items-center gap-1.5"><AlertTriangle className="size-3.5 text-warning" /> Manual override — no automatic ledger adjustment</p>
+            <p className="text-micro text-muted-foreground -mt-1.5">
+              This corrects the raw ledger total only — it does not change which periods show as paid in the
+              payment schedule below (that comes from confirmed payments). To fix how much a customer has
+              actually paid, use &ldquo;Confirm payment&rdquo; on the relevant period instead.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-body-sm font-medium block mb-1.5">Status</label>

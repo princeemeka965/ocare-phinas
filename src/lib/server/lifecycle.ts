@@ -186,6 +186,9 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
  *   and freeing it again would double-credit the group.
  * - Transaction rows are kept for audit but detached (`planId` has no
  *   `ON DELETE` clause, so it must be cleared before the Plan row can go).
+ *   Order.planId is likewise a bare reference with no `ON DELETE` clause —
+ *   any Order still pointing at this plan is detached the same way, *before*
+ *   the delete, otherwise Postgres rejects it with a foreign-key violation.
  * - Spent-on-products: mirrors whatever confirmPlanPeriod credited at the
  *   delivered/completed transitions, recomputed from the same fields (solo/
  *   group only — solar's deposit-driven spend is reversed separately in
@@ -229,5 +232,7 @@ export async function reversePlan(plan: Plan): Promise<void> {
   }
 
   await supabase.from("Transaction").update({ planId: null }).eq("planId", plan.id);
-  await supabase.from("Plan").delete().eq("id", plan.id);
+  await supabase.from("Order").update({ planId: null }).eq("planId", plan.id);
+  const deleted = await supabase.from("Plan").delete().eq("id", plan.id);
+  if (deleted.error) throw new Error(deleted.error.message);
 }

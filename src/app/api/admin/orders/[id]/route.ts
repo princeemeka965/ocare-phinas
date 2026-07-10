@@ -61,16 +61,20 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     .maybeSingle<Order & { items: OrderItem[]; plan: Plan | null }>();
   if (!order) return jsonError(404, "Order not found.");
 
-  if (order.plan) {
-    if (order.plan.amountAllocated > 0) {
-      return jsonError(409, "This order has confirmed payments. Delete the plan first, then delete the order.");
+  try {
+    if (order.plan) {
+      if (order.plan.amountAllocated > 0) {
+        return jsonError(409, "This order has confirmed payments. Delete the plan first, then delete the order.");
+      }
+      await reversePlan(order.plan);
+    } else if (["processing", "shipped", "delivered"].includes(order.status)) {
+      // Outright — stock was decremented at confirm; restore it before deleting.
+      for (const item of order.items) {
+        if (item.productId) await supabase.rpc("inc_product_stock", { p_id: item.productId, delta: item.qty });
+      }
     }
-    await reversePlan(order.plan);
-  } else if (["processing", "shipped", "delivered"].includes(order.status)) {
-    // Outright — stock was decremented at confirm; restore it before deleting.
-    for (const item of order.items) {
-      if (item.productId) await supabase.rpc("inc_product_stock", { p_id: item.productId, delta: item.qty });
-    }
+  } catch (err) {
+    return jsonError(500, err instanceof Error ? err.message : "Couldn't delete the order.");
   }
 
   await supabase.from("Order").delete().eq("id", id);
