@@ -85,13 +85,15 @@ export default function SolarPackagesPage() {
               >
                 <Sun className="size-5" /> View My Application
               </Link>
-            ) : (
+            ) : packages === null ? null : packages.length > 0 ? (
               <Link
                 href="/solar/apply"
                 className="inline-flex items-center justify-center gap-2 h-12 px-8 rounded-xl font-semibold text-body text-primary bg-white hover:bg-white/90 transition-colors"
               >
                 <Sun className="size-5" /> Apply Now
               </Link>
+            ) : (
+              <p className="text-body-sm text-white/80">No solar packages are available right now.</p>
             )}
           </div>
         </Container>
