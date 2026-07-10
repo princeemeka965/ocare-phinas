@@ -60,6 +60,14 @@ export async function GET() {
   // (covers every confirmed solo/group period and the solar initial deposit).
   const revenueByType = emptyByType();
   const revenueThisMonthByType = emptyByType();
+  // A deposit whose Plan has since been deleted (e.g. the admin "delete plan"
+  // action, which detaches — never deletes — its Transaction rows) still
+  // really happened and must still count toward total revenue; there's just
+  // no live Plan left to attribute it to a type, so it's tracked separately
+  // rather than silently dropped (which would understate realized revenue by
+  // exactly what was paid into every since-deleted plan).
+  let revenueUnattributed = 0;
+  let revenueThisMonthUnattributed = 0;
 
   for (const o of outrightOrders) {
     revenueByType.outright += o.total;
@@ -67,12 +75,17 @@ export async function GET() {
   }
   for (const t of depositTxns) {
     const type = Array.isArray(t.plan) ? t.plan[0]?.type : t.plan?.type;
-    if (!type) continue;
+    if (!type) {
+      revenueUnattributed += t.amount;
+      if (t.createdAt >= monthStart) revenueThisMonthUnattributed += t.amount;
+      continue;
+    }
     revenueByType[type] += t.amount;
     if (t.createdAt >= monthStart) revenueThisMonthByType[type] += t.amount;
   }
-  const revenueTotal = PLAN_TYPES.reduce((s, t) => s + revenueByType[t], 0);
-  const revenueThisMonthTotal = PLAN_TYPES.reduce((s, t) => s + revenueThisMonthByType[t], 0);
+  const revenueTotal = PLAN_TYPES.reduce((s, t) => s + revenueByType[t], 0) + revenueUnattributed;
+  const revenueThisMonthTotal =
+    PLAN_TYPES.reduce((s, t) => s + revenueThisMonthByType[t], 0) + revenueThisMonthUnattributed;
 
   // Outstanding / expected payments — remaining balance on every ongoing plan.
   const expectedRemainingByType = emptyByType();
