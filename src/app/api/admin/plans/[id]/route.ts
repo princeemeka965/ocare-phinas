@@ -99,20 +99,26 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const g = await gate(plan.type);
   if ("response" in g) return g.response;
 
-  if (plan.type === "solar") {
-    if (!plan.solarApplicationId) return jsonError(500, "This solar plan has no linked application.");
-    await reversePlan(plan);
-    await revertSolarApplicationAfterPlanDeletion(plan.solarApplicationId, plan);
-  } else {
-    const { data: order } = await supabase
-      .from("Order")
-      .select("id")
-      .eq("planId", plan.id)
-      .maybeSingle<Pick<Order, "id">>();
-    await reversePlan(plan);
-    if (order) {
-      await supabase.from("Order").update({ planId: null, status: "cancelled" }).eq("id", order.id);
+  try {
+    if (plan.type === "solar") {
+      if (!plan.solarApplicationId) return jsonError(500, "This solar plan has no linked application.");
+      await reversePlan(plan);
+      await revertSolarApplicationAfterPlanDeletion(plan.solarApplicationId, plan);
+    } else {
+      const { data: order } = await supabase
+        .from("Order")
+        .select("id")
+        .eq("planId", plan.id)
+        .maybeSingle<Pick<Order, "id">>();
+      await reversePlan(plan);
+      // reversePlan() already detached Order.planId (required before it could
+      // delete the Plan row) — this only needs to set the fulfilment status.
+      if (order) {
+        await supabase.from("Order").update({ status: "cancelled" }).eq("id", order.id);
+      }
     }
+  } catch (err) {
+    return jsonError(500, err instanceof Error ? err.message : "Couldn't delete the plan.");
   }
 
   return NextResponse.json({ ok: true });
