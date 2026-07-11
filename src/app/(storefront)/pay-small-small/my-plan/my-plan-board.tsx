@@ -145,14 +145,27 @@ export function MyPlanBoard() {
 
   useEffect(() => {
     if (!user) return;
-    api.get<{ plans: ApiPlan[] }>("/api/me/plans").then((d) => setPlans(d.plans)).catch(() => setPlans([]));
-    api.get<{ wallet: WalletData }>("/api/me/wallet").then((d) => setWallet(d.wallet)).catch(() => {});
-    api.get<{ contributions: Contribution[] }>("/api/me/contributions").then((d) => setContributions(d.contributions)).catch(() => {});
-    api.get<{ settings: PublicSettings }>("/api/settings").then((d) => setSettings(d.settings)).catch(() => {});
-    api
-      .get<{ application: SolarApplication | null; package: SolarPackage | null; plan: Plan | null; health: PaymentHealth | null }>("/api/solar/application")
-      .then((d) => setSolar(d.application ? { application: d.application, package: d.package, plan: d.plan, health: d.health } : null))
-      .catch(() => {});
+
+    const load = () => {
+      api.get<{ plans: ApiPlan[] }>("/api/me/plans").then((d) => setPlans(d.plans)).catch(() => setPlans([]));
+      api.get<{ wallet: WalletData }>("/api/me/wallet").then((d) => setWallet(d.wallet)).catch(() => {});
+      api.get<{ contributions: Contribution[] }>("/api/me/contributions").then((d) => setContributions(d.contributions)).catch(() => {});
+      api.get<{ settings: PublicSettings }>("/api/settings").then((d) => setSettings(d.settings)).catch(() => {});
+      api
+        .get<{ application: SolarApplication | null; package: SolarPackage | null; plan: Plan | null; health: PaymentHealth | null }>("/api/solar/application")
+        .then((d) => setSolar(d.application ? { application: d.application, package: d.package, plan: d.plan, health: d.health } : null))
+        .catch(() => {});
+    };
+    load();
+
+    // Safari/iOS can restore this page from bfcache on back/forward nav without
+    // re-running this effect, leaving stale plans/wallet state on screen — force
+    // a refetch when that happens.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) load();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, [user]);
 
   if (!user) {
