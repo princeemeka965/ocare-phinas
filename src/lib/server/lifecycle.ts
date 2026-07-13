@@ -56,8 +56,17 @@ export type ConfirmResult =
  * threshold (solo 50% / group 100%) decrementing stock once, completes the plan
  * at 100% (group: also removes membership + frees the slot), and pauses to
  * `awaiting_substitution` if the product sold out at the trigger (§7).
+ *
+ * `allowAhead` skips the "not due yet" guard — used by recordLumpPayment,
+ * where a customer paying several periods at once (e.g. ₦130k upfront) is
+ * expected to reach periods that haven't come due on the schedule yet.
  */
-export async function confirmPlanPeriod(orderId: string, periodIndex: number, adminId: string): Promise<ConfirmResult> {
+export async function confirmPlanPeriod(
+  orderId: string,
+  periodIndex: number,
+  adminId: string,
+  opts?: { allowAhead?: boolean },
+): Promise<ConfirmResult> {
   const { data: order } = await supabase
     .from("Order")
     .select("*, plan:Plan(*)")
@@ -82,7 +91,9 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
   const period = periods.find((p) => p.index === periodIndex);
   if (!period) return { ok: false, status: 400, error: "Invalid period." };
   if (period.status === "paid") return { ok: false, status: 409, error: "That period is already confirmed." };
-  if (period.status === "upcoming") return { ok: false, status: 400, error: "No paying ahead — that period is not due yet." };
+  if (period.status === "upcoming" && !opts?.allowAhead) {
+    return { ok: false, status: 400, error: "No paying ahead — that period is not due yet." };
+  }
 
   // Record the period. The unique (planId, periodIndex) constraint makes this
   // idempotent — a concurrent duplicate confirm fails here (code 23505).
@@ -169,6 +180,107 @@ export async function confirmPlanPeriod(orderId: string, periodIndex: number, ad
   }
 
   return { ok: true, amountAllocated, planStatus, orderStatus, awaitingSubstitution };
+}
+
+export type LumpPaymentResult =
+  | (ConfirmResult & { periodsConfirmed: number; leftover: number })
+  | { ok: false; status: number; error: string };
+
+/**
+ * Record a lump sum against a Solo/Group plan — e.g. an admin editing
+ * "amount paid" from ₦30,000 to ₦90,000 after a further ₦60,000 came in.
+ * Fills whole periods in schedule order via confirmPlanPeriod (so the wallet
+ * credit, goods trigger and completion checks all run exactly as they would
+ * for a normal confirm — this is not a parallel code path), allowing ahead
+ * since a lump sum routinely covers periods that aren't due yet. Any amount
+ * left over once every affordable whole period is filled (the payment didn't
+ * land on a period boundary) is still credited to the wallet as uncommitted
+ * balance — real money the customer paid, not lost — ready to apply once
+ * it's enough to cover the next period.
+ */
+export async function recordLumpPayment(orderId: string, amount: number, adminId: string): Promise<LumpPaymentResult> {
+  if (amount <= 0) return { ok: false, status: 400, error: "Amount must be greater than zero." };
+
+  const { data: order } = await supabase
+    .from("Order")
+    .select("*, plan:Plan(*)")
+    .eq("id", orderId)
+    .maybeSingle<Order & { plan: Plan | null }>();
+  if (!order || !order.plan) return { ok: false, status: 404, error: "Plan order not found." };
+  const plan = order.plan;
+
+  const scheduleTotal = plan.productPrice + plan.deliveryFee;
+  const existing = unwrap(
+    await supabase.from("PlanPayment").select("*").eq("planId", plan.id),
+  ) as PlanPayment[];
+  const unpaid = planPeriods({
+    price: scheduleTotal,
+    perPayment: plan.perPayment,
+    frequency: plan.frequency,
+    startDate: new Date(plan.startDate).toISOString(),
+    paidIndices: existing.map((p) => p.periodIndex),
+  })
+    .filter((p) => p.status !== "paid")
+    .sort((a, b) => a.index - b.index);
+
+  let remaining = amount;
+  let periodsConfirmed = 0;
+  let last: ConfirmResult | null = null;
+
+  for (const period of unpaid) {
+    if (remaining < period.amount) break;
+    const result = await confirmPlanPeriod(orderId, period.index, adminId, { allowAhead: true });
+    if (!result.ok) return result;
+    remaining -= period.amount;
+    periodsConfirmed++;
+    last = result;
+  }
+
+  if (remaining > 0) {
+    const { data: wallet } = await supabase
+      .from("Wallet")
+      .select("*")
+      .eq("customerId", plan.customerId)
+      .maybeSingle<Wallet>();
+    if (wallet) {
+      await supabase.from("Transaction").insert({
+        walletId: wallet.id,
+        type: "deposit",
+        amount: remaining,
+        planId: plan.id,
+        approved: true,
+      });
+      await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: remaining });
+    }
+  }
+
+  return {
+    ok: true,
+    amountAllocated: last?.amountAllocated ?? plan.amountAllocated,
+    planStatus: last?.planStatus ?? plan.status,
+    orderStatus: last?.orderStatus ?? order.status,
+    awaitingSubstitution: last?.awaitingSubstitution ?? false,
+    periodsConfirmed,
+    leftover: remaining,
+  };
+}
+
+/**
+ * Adjust Wallet.totalBalance by an arbitrary delta with no PlanPayment/period
+ * changes — used for the rare manual correction (an admin lowering a
+ * previously over-recorded amountAllocated, or crediting a solar deposit-stage
+ * plan that has no active repayment schedule yet). No Transaction row: this
+ * mirrors reversePlan's direct inc_wallet_total call rather than a normal
+ * deposit, since it isn't a real payment event.
+ */
+export async function adjustWalletTotal(customerId: string, delta: number): Promise<void> {
+  if (delta === 0) return;
+  const { data: wallet } = await supabase
+    .from("Wallet")
+    .select("id")
+    .eq("customerId", customerId)
+    .maybeSingle<Pick<Wallet, "id">>();
+  if (wallet) await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta });
 }
 
 /**
