@@ -46,11 +46,14 @@ interface ProductOption {
 
 /**
  * Admin escape hatch for a customer's Plan — edit its schedule, swap the
- * product/package, override its status, or manually correct amountAllocated
- * (the last two are direct column writes with no ledger/stock/wallet sync,
- * flagged accordingly), and delete it outright (reverses wallet/stock/group
- * effects first — see reversePlan in src/lib/server/lifecycle.ts). Shared by
- * the order detail page (solo/group) and the solar application detail page.
+ * product/package, override its status, record/correct how much a customer
+ * has paid, and delete it outright (reverses wallet/stock/group effects
+ * first — see reversePlan in src/lib/server/lifecycle.ts). Raising "Amount
+ * paid" is ledger-synced (fills whole payment periods and credits the wallet
+ * — see recordLumpPayment/recordSolarLumpPayment); lowering it is a manual
+ * correction that debits the wallet by the same amount but leaves confirmed
+ * periods alone. Status remains a direct, unsynced override. Shared by the
+ * order detail page (solo/group) and the solar application detail page.
  */
 export function PlanActions({
   plan,
@@ -182,11 +185,14 @@ export function PlanActions({
           )}
 
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 space-y-3">
-            <p className="text-caption font-semibold flex items-center gap-1.5"><AlertTriangle className="size-3.5 text-warning" /> Manual override — no automatic ledger adjustment</p>
+            <p className="text-caption font-semibold flex items-center gap-1.5"><AlertTriangle className="size-3.5 text-warning" /> Status is a manual override — no ledger sync</p>
             <p className="text-micro text-muted-foreground -mt-1.5">
-              This corrects the raw ledger total only — it does not change which periods show as paid in the
-              payment schedule below (that comes from confirmed payments). To fix how much a customer has
-              actually paid, use &ldquo;Confirm payment&rdquo; on the relevant period instead.
+              Raising &ldquo;Amount paid&rdquo; records it as a real payment — it fills whole periods in the
+              schedule below in order and credits the customer&apos;s wallet, same as confirming a period one
+              at a time (a partial amount that doesn&apos;t complete a period is still credited to the wallet,
+              held uncommitted until the next period). Lowering it is treated as correcting a past over-record:
+              it debits the wallet by the difference but does not un-confirm any period or reverse fulfilment —
+              use &ldquo;Delete plan&rdquo; if a confirmed payment needs to be fully reversed.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -196,7 +202,7 @@ export function PlanActions({
                 </Select>
               </div>
               <div>
-                <label className="text-body-sm font-medium block mb-1.5">Amount allocated (₦)</label>
+                <label className="text-body-sm font-medium block mb-1.5">Amount paid (₦)</label>
                 <Input type="number" min={0} value={amountAllocated} onChange={(e) => setAmountAllocated(e.target.value)} />
               </div>
             </div>

@@ -509,6 +509,7 @@ export async function confirmSolarPeriod(
   applicationId: string,
   periodIndex: number,
   adminId: string,
+  opts?: { allowAhead?: boolean },
 ): Promise<SolarResult<{ amountAllocated: number; planStatus: string }>> {
   const { data: plan } = await supabase.from("Plan").select("*").eq("solarApplicationId", applicationId).maybeSingle<Plan>();
   if (!plan || plan.status !== "active") return { ok: false, status: 409, error: "This plan isn't in active repayment." };
@@ -524,7 +525,9 @@ export async function confirmSolarPeriod(
   const period = periods.find((p) => p.index === periodIndex);
   if (!period) return { ok: false, status: 400, error: "Invalid period." };
   if (period.status === "paid") return { ok: false, status: 409, error: "That period is already confirmed." };
-  if (period.status === "upcoming") return { ok: false, status: 400, error: "No paying ahead — that period is not due yet." };
+  if (period.status === "upcoming" && !opts?.allowAhead) {
+    return { ok: false, status: 400, error: "No paying ahead — that period is not due yet." };
+  }
 
   const inserted = await supabase.from("PlanPayment").insert({
     planId: plan.id,
@@ -562,6 +565,76 @@ export async function confirmSolarPeriod(
   }
 
   return { ok: true, amountAllocated, planStatus };
+}
+
+export type SolarLumpPaymentResult = SolarResult<{
+  amountAllocated: number;
+  planStatus: string;
+  periodsConfirmed: number;
+  leftover: number;
+}>;
+
+/**
+ * Record a lump sum against an active solar repayment plan — parallel to
+ * recordLumpPayment (lifecycle.ts). Fills whole periods in schedule order via
+ * confirmSolarPeriod (allowing ahead), crediting any remainder that doesn't
+ * fill a whole period to the wallet directly as uncommitted balance.
+ */
+export async function recordSolarLumpPayment(
+  applicationId: string,
+  amount: number,
+  adminId: string,
+): Promise<SolarLumpPaymentResult> {
+  if (amount <= 0) return { ok: false, status: 400, error: "Amount must be greater than zero." };
+
+  const { data: plan } = await supabase.from("Plan").select("*").eq("solarApplicationId", applicationId).maybeSingle<Plan>();
+  if (!plan || plan.status !== "active") return { ok: false, status: 409, error: "This plan isn't in active repayment." };
+
+  const existing = unwrap(await supabase.from("PlanPayment").select("*").eq("planId", plan.id)) as PlanPayment[];
+  const unpaid = planPeriods({
+    price: plan.productPrice,
+    perPayment: plan.perPayment,
+    frequency: plan.frequency,
+    startDate: new Date(plan.startDate).toISOString(),
+    paidIndices: existing.map((p) => p.periodIndex),
+  })
+    .filter((p) => p.status !== "paid")
+    .sort((a, b) => a.index - b.index);
+
+  let remaining = amount;
+  let periodsConfirmed = 0;
+  let last: { amountAllocated: number; planStatus: string } | null = null;
+
+  for (const period of unpaid) {
+    if (remaining < period.amount) break;
+    const result = await confirmSolarPeriod(applicationId, period.index, adminId, { allowAhead: true });
+    if (!result.ok) return result;
+    remaining -= period.amount;
+    periodsConfirmed++;
+    last = result;
+  }
+
+  if (remaining > 0) {
+    const { data: wallet } = await supabase.from("Wallet").select("*").eq("customerId", plan.customerId).maybeSingle<Wallet>();
+    if (wallet) {
+      await supabase.from("Transaction").insert({
+        walletId: wallet.id,
+        type: "deposit",
+        amount: remaining,
+        planId: plan.id,
+        approved: true,
+      });
+      await supabase.rpc("inc_wallet_total", { w_id: wallet.id, delta: remaining });
+    }
+  }
+
+  return {
+    ok: true,
+    amountAllocated: last?.amountAllocated ?? plan.amountAllocated,
+    planStatus: last?.planStatus ?? plan.status,
+    periodsConfirmed,
+    leftover: remaining,
+  };
 }
 
 /**

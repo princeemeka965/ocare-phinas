@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { supabase, unwrap } from "@/lib/supabase";
 import { currentAdmin, adminCan, jsonError, unauthorized, forbidden } from "@/lib/auth/guards";
-import { reversePlan } from "@/lib/server/lifecycle";
-import { revertSolarApplicationAfterPlanDeletion } from "@/lib/server/solar-lifecycle";
+import { reversePlan, recordLumpPayment, adjustWalletTotal } from "@/lib/server/lifecycle";
+import { revertSolarApplicationAfterPlanDeletion, recordSolarLumpPayment } from "@/lib/server/solar-lifecycle";
 import { resolveDelivery } from "@/lib/delivery";
 import type { AdminPermission } from "@/lib/admin-access";
 import type { Order, Plan, Product } from "@/lib/db/types";
@@ -44,8 +44,14 @@ const patchSchema = z
   .partial();
 
 // PATCH /api/admin/plans/:id — manual corrections: schedule fields, product/
-// package swap, a status override, and a direct amountAllocated edit. The
-// latter two are deliberate escape hatches with no automatic ledger sync.
+// package swap, a status override, and an amount-paid edit. Raising
+// amountAllocated is routed through the same period-confirm ledger path as a
+// normal payment (recordLumpPayment/recordSolarLumpPayment) — it fills whole
+// periods and credits the wallet for real, rather than writing the column
+// raw. Lowering it is treated as a correction to a past over-record: the
+// column is written directly, but the wallet is debited by the same delta so
+// it never drifts out of reconciliation (see wallet-breakdown.ts). Status
+// remains a direct escape hatch with no ledger sync.
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const { data: plan } = await supabase.from("Plan").select("*").eq("id", id).maybeSingle<Plan>();
@@ -56,9 +62,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Invalid plan details.");
-  const { productId, ...rest } = parsed.data;
+  const { productId, amountAllocated: requestedAmount, ...rest } = parsed.data;
 
   const update: Partial<Plan> = { ...rest };
+  // The edit dialog always submits the plan's status as it stood when the
+  // dialog opened, even if the admin only meant to touch amount/schedule
+  // fields. Treating "unchanged" as "no opinion" avoids stomping a status
+  // transition that a lump-payment confirm below makes in the meantime
+  // (e.g. crossing the processing/delivered threshold).
+  if (update.status === plan.status) delete update.status;
 
   if (productId !== undefined && productId !== plan.productId) {
     if (productId === null) {
@@ -77,6 +89,30 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         update.deliveryFee = order ? resolveDelivery(order.deliveryMethod, product.deliveryFee).deliveryFee : product.deliveryFee;
       }
       if (!plan.originalProductId) update.originalProductId = plan.productId;
+    }
+  }
+
+  if (requestedAmount !== undefined && requestedAmount !== plan.amountAllocated) {
+    const delta = requestedAmount - plan.amountAllocated;
+
+    if (delta > 0 && plan.type === "solar" && plan.status === "active" && plan.solarApplicationId) {
+      const result = await recordSolarLumpPayment(plan.solarApplicationId, delta, g.admin.id);
+      if (!result.ok) return jsonError(result.status, result.error);
+    } else if (delta > 0 && plan.type !== "solar") {
+      const { data: order } = await supabase
+        .from("Order")
+        .select("id")
+        .eq("planId", plan.id)
+        .maybeSingle<Pick<Order, "id">>();
+      if (!order) return jsonError(409, "No order is linked to this plan — can't record a payment against it.");
+      const result = await recordLumpPayment(order.id, delta, g.admin.id);
+      if (!result.ok) return jsonError(result.status, result.error);
+    } else {
+      // Solar plans not yet in active repayment (deposit stage) have no period
+      // schedule to fill, and any decrease is a correction, not a payment —
+      // both just move the raw total and reconcile the wallet by the delta.
+      await adjustWalletTotal(plan.customerId, delta);
+      update.amountAllocated = requestedAmount;
     }
   }
 
