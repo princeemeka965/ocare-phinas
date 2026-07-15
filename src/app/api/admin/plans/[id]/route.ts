@@ -38,6 +38,7 @@ const patchSchema = z
       "awaiting_substitution",
       "awaiting_installation",
       "defaulted",
+      "cancelled",
     ]),
     amountAllocated: z.number().int().min(0),
   })

@@ -16,7 +16,8 @@ export type PlanStatus =
   | "completed"
   | "awaiting_substitution"
   | "awaiting_installation"
-  | "defaulted";
+  | "defaulted"
+  | "cancelled";
 export type OrderStatus =
   | "pending_payment"
   | "payment_submitted"

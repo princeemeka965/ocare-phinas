@@ -33,6 +33,7 @@ const STATUS_OPTIONS: PlanStatus[] = [
   "awaiting_substitution",
   "awaiting_installation",
   "defaulted",
+  "cancelled",
 ];
 
 const FREQUENCY_OPTIONS: PlanFrequency[] = ["daily", "weekly", "monthly"];

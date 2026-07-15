@@ -17,9 +17,12 @@ import {
 
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
-import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { api, ApiError } from "@/lib/api";
+import { toast } from "@/store/toastStore";
 import { useUserStore } from "@/store/userStore";
 import { AuthRequired } from "@/components/storefront/auth-required";
+import { PlanSwapDialog } from "@/components/storefront/plan-swap-dialog";
 import { naira, SOLO_DELIVERY_THRESHOLD, SOLO_FREQUENCIES, type SoloFrequency } from "@/lib/pay-small-small";
 import { HEALTH_META, arrearsSummary, isArrears, type PaymentHealth } from "@/lib/payment-health";
 import { SOLAR_STATUS_META } from "@/lib/solar";
@@ -33,6 +36,7 @@ interface ApiPlan {
   id: string;
   type: PlanType;
   reference: string | null;
+  productId: string | null;
   productName: string | null;
   productImage: string | null;
   productPrice: number;
@@ -142,6 +146,27 @@ export function MyPlanBoard() {
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [solar, setSolar] = useState<SolarPlanData | null>(null);
+  const [swapPlan, setSwapPlan] = useState<ApiPlan | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  function refreshPlansAndWallet() {
+    api.get<{ plans: ApiPlan[] }>("/api/me/plans").then((d) => setPlans(d.plans)).catch(() => {});
+    api.get<{ wallet: WalletData }>("/api/me/wallet").then((d) => setWallet(d.wallet)).catch(() => {});
+  }
+
+  async function cancelPlan(plan: ApiPlan) {
+    if (!confirm(`Move ${naira(plan.amountAllocated)} back to your available balance? This can't be undone.`)) return;
+    setCancellingId(plan.id);
+    try {
+      const { freedAmount } = await api.post<{ ok: true; freedAmount: number }>(`/api/me/plans/${plan.id}/cancel`);
+      toast.success(`${naira(freedAmount)} moved to your available balance.`, "Plan cancelled");
+      refreshPlansAndWallet();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't cancel this plan.");
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -440,6 +465,25 @@ export function MyPlanBoard() {
                       </a>
                     )}
                   </div>
+
+                  {/* Pre-delivery self-service: nothing's been handed over yet, so
+                      switching items or cancelling for wallet credit is safe. */}
+                  {plan.status === "active" && (
+                    <div className="border-t border-border px-5 py-3 flex items-center gap-2 flex-wrap">
+                      <Button variant="outline" size="sm" onClick={() => setSwapPlan(plan)}>
+                        Switch item
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => cancelPlan(plan)}
+                        disabled={cancellingId === plan.id}
+                      >
+                        {cancellingId === plan.id ? "Cancelling…" : "Cancel plan"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -518,6 +562,16 @@ export function MyPlanBoard() {
           </div>
         </div>
       </Container>
+
+      {swapPlan && (
+        <PlanSwapDialog
+          open={swapPlan !== null}
+          onOpenChange={(o) => !o && setSwapPlan(null)}
+          planId={swapPlan.id}
+          currentProductId={swapPlan.productId}
+          onSwapped={refreshPlansAndWallet}
+        />
+      )}
     </div>
   );
 }

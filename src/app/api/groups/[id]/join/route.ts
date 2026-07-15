@@ -6,7 +6,8 @@ import { requireCustomer, jsonError } from "@/lib/auth/guards";
 import { getSettings } from "@/lib/settings";
 import { isGroupEligible, GROUP_MAX_SLOTS_PER_CUSTOMER } from "@/lib/pay-small-small";
 import { resolveDelivery } from "@/lib/delivery";
-import { hasActivePlanOfType, nextOrderReference } from "@/lib/server/lifecycle";
+import { hasActivePlanOfType, nextOrderReference, recordLumpPayment } from "@/lib/server/lifecycle";
+import { availableWalletBalance } from "@/lib/server/wallet-breakdown";
 import type { Group, Order, Plan, Product } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -118,5 +119,21 @@ export async function POST(req: NextRequest, { params }: Params) {
       .select("*"),
   );
 
-  return NextResponse.json({ order: { ...order, plan, items } }, { status: 201 });
+  // Any uncommitted wallet credit (e.g. from a self-cancelled plan) applies
+  // straight away — same lump-payment path an admin's "amount paid" edit
+  // uses, just with no admin behind it (see recordLumpPayment's adminId doc).
+  let finalPlan: Plan = plan;
+  let finalOrder: Order = order;
+  const available = await availableWalletBalance(gate.customer.id);
+  if (available > 0) {
+    const result = await recordLumpPayment(order.id, Math.min(available, product.price + deliveryFee), null);
+    if (result.ok) {
+      const { data: refreshedOrder } = await supabase.from("Order").select("*").eq("id", order.id).single<Order>();
+      const { data: refreshedPlan } = await supabase.from("Plan").select("*").eq("id", plan.id).single<Plan>();
+      if (refreshedOrder) finalOrder = refreshedOrder;
+      if (refreshedPlan) finalPlan = refreshedPlan;
+    }
+  }
+
+  return NextResponse.json({ order: { ...finalOrder, plan: finalPlan, items } }, { status: 201 });
 }

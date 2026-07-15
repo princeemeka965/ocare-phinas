@@ -31,7 +31,12 @@ export function StatusManager({
 
   const dirty = draft !== status;
   const isCancelled = status === "cancelled";
-  const awaitingPayment = status === "payment_submitted";
+  // Confirm/reject an outright payment from either "pending_payment" (the
+  // customer paid and messaged you directly, without tapping "I've made the
+  // bank transfer" in the app) or "payment_submitted" (they did) — the
+  // backend (/api/admin/orders/:id/confirm and /reject) already accepts
+  // both; this just keeps the button visible for both.
+  const awaitingPayment = status === "payment_submitted" || status === "pending_payment";
   /** Status can only be advanced once the payment has been confirmed. */
   const paymentConfirmed = (["confirmed", "processing", "shipped", "delivered"] as OrderStatus[]).includes(status);
   const statusIdx = FLOW_KEYS.indexOf(status);
