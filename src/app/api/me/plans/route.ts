@@ -21,6 +21,9 @@ export async function GET() {
         "*, payments:PlanPayment(*), product:Product(name,images), order:Order(reference,status)",
       )
       .eq("customerId", gate.customer.id)
+      // Cancelled plans (self-service cancel — see cancelPlanForCredit) are
+      // kept for audit but no longer belong on the customer's active board.
+      .neq("status", "cancelled")
       .order("createdAt", { ascending: false }),
   ) as (Plan & {
     payments: PlanPayment[];
@@ -37,6 +40,7 @@ export async function GET() {
       id: p.id,
       type: p.type,
       reference: order?.reference ?? null,
+      productId: p.productId,
       productName: product?.name ?? null,
       productImage: product?.images[0] ?? null,
       productPrice: p.productPrice,

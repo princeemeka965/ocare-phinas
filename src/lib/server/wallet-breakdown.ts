@@ -1,15 +1,18 @@
 /* ------------------------------------------------------------------ *
  * Wallet balance breakdown — reconciles Wallet.totalBalance against     *
- * live Plan rows so "Available balance" reflects real uncommitted cash  *
- * (there is currently no top-up/overpayment feature, so under normal    *
- * operation this is always 0) rather than a dead, always-zero column.   *
- * A nonzero result is a signal, not a feature: it means a manual admin  *
- * override (see PlanActions — status/amountAllocated edits skip ledger  *
- * sync) has left the wallet out of step with the plans backing it.      *
+ * live Plan rows so "Available balance" reflects real uncommitted cash, *
+ * rather than a dead, always-zero column. It's normally 0, but two      *
+ * things legitimately free money into it: a customer cancelling a plan  *
+ * pre-delivery (cancelPlanForCredit, src/lib/server/lifecycle.ts — the   *
+ * money stays in Wallet.totalBalance, the plan just stops counting as   *
+ * committed) and a manual admin override (PlanActions — status/         *
+ * amountAllocated edits skip ledger sync) leaving the wallet out of      *
+ * step with the plans backing it.                                       *
  * ------------------------------------------------------------------ */
 
 import { supabase } from "@/lib/supabase";
-import type { Plan } from "@/lib/db/types";
+import { ONGOING_PLAN_STATUSES } from "@/lib/pay-small-small";
+import type { Plan, Wallet } from "@/lib/db/types";
 
 type CommittedPlan = Pick<Plan, "type" | "status" | "productPrice" | "deliveryFee" | "amountAllocated">;
 
@@ -64,4 +67,30 @@ export async function solarAwaitingInstallDeposits(customerId?: string): Promise
     const pkg = unembed(application?.package ?? null);
     return sum + (pkg?.initialDeposit ?? 0);
   }, 0);
+}
+
+/**
+ * Uncommitted wallet cash a customer can put toward a new plan: everything
+ * paid in, minus what's already spent on delivered goods, minus what's still
+ * committed to their other open plans. Single source of truth for "available
+ * balance" — used both to display it (GET /api/me/wallet) and to spend it
+ * (auto-applied as a lump payment when a new Solo/Group plan starts).
+ */
+export async function availableWalletBalance(customerId: string): Promise<number> {
+  const [walletRes, openPlansRes, solarDeposits] = await Promise.all([
+    supabase.from("Wallet").select("*").eq("customerId", customerId).maybeSingle<Wallet>(),
+    supabase
+      .from("Plan")
+      .select("type,status,productPrice,deliveryFee,amountAllocated")
+      .eq("customerId", customerId)
+      .in("status", [...ONGOING_PLAN_STATUSES, "awaiting_installation"]),
+    solarAwaitingInstallDeposits(customerId),
+  ]);
+  const wallet = walletRes.data;
+  const openPlans = (openPlansRes.data ?? []) as CommittedPlan[];
+
+  const totalBalance = wallet?.totalBalance ?? 0;
+  const spentOnProducts = wallet?.spentOnProducts ?? 0;
+  const committedTotal = openPlans.reduce((s, p) => s + committedAmount(p), 0) + solarDeposits;
+  return totalBalance - spentOnProducts - committedTotal;
 }

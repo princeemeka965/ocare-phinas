@@ -64,7 +64,7 @@ export type ConfirmResult =
 export async function confirmPlanPeriod(
   orderId: string,
   periodIndex: number,
-  adminId: string,
+  adminId: string | null,
   opts?: { allowAhead?: boolean },
 ): Promise<ConfirmResult> {
   const { data: order } = await supabase
@@ -197,8 +197,11 @@ export type LumpPaymentResult =
  * land on a period boundary) is still credited to the wallet as uncommitted
  * balance — real money the customer paid, not lost — ready to apply once
  * it's enough to cover the next period.
+ *
+ * `adminId` is `null` when this is a customer's own available wallet balance
+ * auto-applying to a plan they just started (no admin involved).
  */
-export async function recordLumpPayment(orderId: string, amount: number, adminId: string): Promise<LumpPaymentResult> {
+export async function recordLumpPayment(orderId: string, amount: number, adminId: string | null): Promise<LumpPaymentResult> {
   if (amount <= 0) return { ok: false, status: 400, error: "Amount must be greater than zero." };
 
   const { data: order } = await supabase
@@ -347,4 +350,33 @@ export async function reversePlan(plan: Plan): Promise<void> {
   await supabase.from("Order").update({ planId: null }).eq("planId", plan.id);
   const deleted = await supabase.from("Plan").delete().eq("id", plan.id);
   if (deleted.error) throw new Error(deleted.error.message);
+}
+
+/**
+ * Cancel a plan that hasn't delivered anything yet (status "active"), turning
+ * its paid-in balance into reusable wallet credit — unlike reversePlan, this
+ * deliberately leaves Wallet.totalBalance/spentOnProducts untouched. The money
+ * was real; it just stops being "committed" to this plan. Wallet's available
+ * balance is derived live from open Plan rows (wallet-breakdown.ts), so a
+ * status flip to "cancelled" — a status excluded from ONGOING_PLAN_STATUSES/
+ * PAYABLE_PLAN_STATUSES — is enough to free it, no ledger writes needed. The
+ * Plan row is kept (not deleted) so PlanPayment history stays intact for
+ * audit; the caller is responsible for marking the linked Order cancelled.
+ */
+export async function cancelPlanForCredit(plan: Plan): Promise<void> {
+  if (plan.type === "group" && plan.groupId) {
+    const { data: membership } = await supabase
+      .from("GroupMembership")
+      .select("id,slotsHeld")
+      .eq("groupId", plan.groupId)
+      .eq("customerId", plan.customerId)
+      .maybeSingle<{ id: string; slotsHeld: number }>();
+    if (membership) {
+      await supabase.from("GroupMembership").delete().eq("id", membership.id);
+      await supabase.rpc("inc_group_slots", { g_id: plan.groupId, delta: -membership.slotsHeld });
+    }
+  }
+
+  const updated = await supabase.from("Plan").update({ status: "cancelled" }).eq("id", plan.id);
+  if (updated.error) throw new Error(updated.error.message);
 }
