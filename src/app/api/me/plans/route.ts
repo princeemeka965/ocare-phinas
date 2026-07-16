@@ -24,6 +24,12 @@ export async function GET() {
       // Cancelled plans (self-service cancel — see cancelPlanForCredit) are
       // kept for audit but no longer belong on the customer's active board.
       .neq("status", "cancelled")
+      // Solar plans have their own dedicated card (SolarPlanCard, fed by
+      // /api/solar/application) and their own status machine (e.g.
+      // "awaiting_installation", "defaulted") that MyPlanBoard's TYPE_META/
+      // STATUS_META don't recognise — including them here throws mid-render
+      // and blanks the whole "Your purchases" list, not just the solar row.
+      .neq("type", "solar")
       .order("createdAt", { ascending: false }),
   ) as (Plan & {
     payments: PlanPayment[];
