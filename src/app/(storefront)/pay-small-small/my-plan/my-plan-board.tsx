@@ -484,6 +484,21 @@ export function MyPlanBoard() {
                       </Button>
                     </div>
                   )}
+
+                  {/* Out-of-stock substitution: the item sold out right at
+                      delivery — no cancel here since goods-value has already
+                      been earmarked, only a replacement moves it forward. */}
+                  {plan.status === "awaiting_substitution" && (
+                    <div className="border-t border-warning/40 bg-warning/10 px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-caption text-foreground flex items-center gap-1.5">
+                        <AlertTriangle className="size-3.5" />
+                        This item is out of stock — pick a replacement to keep your plan moving.
+                      </p>
+                      <Button variant="outline" size="sm" onClick={() => setSwapPlan(plan)}>
+                        Pick replacement item
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}

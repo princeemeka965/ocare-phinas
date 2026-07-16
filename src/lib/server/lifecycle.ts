@@ -182,6 +182,48 @@ export async function confirmPlanPeriod(
   return { ok: true, amountAllocated, planStatus, orderStatus, awaitingSubstitution };
 }
 
+/**
+ * Resolve a plan stuck in `awaiting_substitution` onto a newly chosen,
+ * in-stock product — the customer-self-service counterpart to the
+ * goods-trigger branch inside confirmPlanPeriod above (§7), entered from the
+ * swap route instead of a payment confirmation. `amountAllocated` never
+ * changes here (the customer already paid enough to cross the trigger on the
+ * old item); this only applies the stock/wallet/group-membership side effects
+ * that were deferred while the plan waited for a replacement, using the new
+ * product's price to decide whether it lands on `delivered` or `completed`.
+ * Caller must have already verified the new product is in stock and written
+ * its price/productId/deliveryFee onto the Plan row.
+ */
+export async function resolveSubstitution(
+  plan: Plan,
+  product: Product,
+  deliveryFee: number,
+): Promise<{ planStatus: Plan["status"]; orderStatus: Order["status"] }> {
+  const goodsTrigger = Math.round(product.price * (plan.type === "solo" ? 0.5 : 1));
+  const scheduleTotal = product.price + deliveryFee;
+
+  await supabase.rpc("inc_product_stock", { p_id: product.id, delta: -1 });
+
+  const { data: wallet } = await supabase
+    .from("Wallet")
+    .select("*")
+    .eq("customerId", plan.customerId)
+    .maybeSingle<Wallet>();
+  if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: goodsTrigger });
+
+  let planStatus: Plan["status"] = "delivered";
+  if (plan.amountAllocated >= scheduleTotal) {
+    planStatus = "completed";
+    if (plan.type === "group" && plan.groupId) {
+      await supabase.from("GroupMembership").delete().eq("groupId", plan.groupId).eq("customerId", plan.customerId);
+      await supabase.rpc("inc_group_slots", { g_id: plan.groupId, delta: -plan.slots });
+    }
+    if (wallet) await supabase.rpc("inc_wallet_spent", { w_id: wallet.id, delta: scheduleTotal - goodsTrigger });
+  }
+
+  return { planStatus, orderStatus: "processing" };
+}
+
 export type LumpPaymentResult =
   | (ConfirmResult & { periodsConfirmed: number; leftover: number })
   | { ok: false; status: number; error: string };

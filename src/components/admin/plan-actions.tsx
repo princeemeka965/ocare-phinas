@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
+import { naira } from "@/lib/pay-small-small";
 import type { PlanFrequency, PlanStatus, PlanType } from "@/lib/db/types";
 
 /** The subset of a Plan row this component needs — satisfied by both the
@@ -91,13 +92,22 @@ export function PlanActions({
   }, [editOpen, isSolar, products]);
 
   async function save() {
+    const newAmount = Number(amountAllocated);
+    if (newAmount < plan.amountAllocated) {
+      const drop = plan.amountAllocated - newAmount;
+      const confirmed = confirm(
+        `Lowering "Amount paid" from ${naira(plan.amountAllocated)} to ${naira(newAmount)} also pulls ${naira(drop)} back out of this customer's wallet immediately — it does not un-confirm any payment period, and there's no undo. Continue?`,
+      );
+      if (!confirmed) return;
+    }
+
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
         startDate: new Date(startDate).toISOString(),
         perPayment: Number(perPayment),
         status,
-        amountAllocated: Number(amountAllocated),
+        amountAllocated: newAmount,
       };
       if (!isGroup) body.frequency = frequency;
       if (!isSolar) {
