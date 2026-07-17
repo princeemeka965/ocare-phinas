@@ -7,18 +7,26 @@ import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
+import { api, ApiError } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    // Phase 3: wire up password reset email API
-    await new Promise((r) => setTimeout(r, 800));
-    setLoading(false);
-    setSent(true);
+    const email = (new FormData(e.currentTarget).get("email") as string)?.trim() ?? "";
+    try {
+      await api.post("/api/auth/forgot-password", { email });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't send the reset link. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -64,6 +72,7 @@ export default function ForgotPasswordPage() {
                 </label>
                 <input
                   id="email"
+                  name="email"
                   type="email"
                   autoComplete="email"
                   required
@@ -71,6 +80,12 @@ export default function ForgotPasswordPage() {
                   className="w-full h-10 px-3 rounded-lg border border-input bg-background text-body-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary transition-colors"
                 />
               </div>
+
+              {error && (
+                <p className="text-caption text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
 
               <Button type="submit" size="lg" className="w-full" disabled={loading}>
                 {loading ? "Sending…" : "Send reset link"}

@@ -5,7 +5,8 @@ import { ArrowRight, Sparkles, ShieldCheck } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { buttonVariants } from "@/components/ui/button";
 import { BrandLogo } from "@/components/storefront/brand-logo";
-import { BRANDS, brandHref } from "@/lib/brands";
+import { brandHref, resolveBrandLogo, resolveBrandMeta } from "@/lib/brands";
+import { listBrands } from "@/lib/server/catalog";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -19,10 +20,20 @@ export const metadata: Metadata = {
   },
 };
 
-const featured = BRANDS.filter((b) => b.featured);
-const totalProducts = BRANDS.reduce((sum, b) => sum + b.productCount, 0);
+// Refresh at most once a minute — brands/products change via the admin dashboard.
+export const revalidate = 60;
 
-export default function BrandsPage() {
+export default async function BrandsPage() {
+  const dbBrands = await listBrands();
+  const brands = dbBrands.map((b) => ({
+    ...b,
+    productCount: b._count.products,
+    ...resolveBrandMeta(b),
+    ...resolveBrandLogo(b),
+  }));
+  const featured = brands.filter((b) => b.featured);
+  const totalProducts = brands.reduce((sum, b) => sum + b.productCount, 0);
+
   return (
     <div className="py-8 sm:py-12">
       <Container>
@@ -38,7 +49,7 @@ export default function BrandsPage() {
           </p>
           <h1 className="text-h1 font-bold">Shop by Brand</h1>
           <p className="text-muted-foreground mt-1 max-w-[52ch]">
-            {BRANDS.length} trusted brands and {totalProducts}+ genuine products. Every item is
+            {brands.length} trusted brands and {totalProducts}+ genuine products. Every item is
             sourced from authorised distributors — no fakes, ever.
           </p>
         </div>
@@ -105,7 +116,7 @@ export default function BrandsPage() {
             All Brands
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {BRANDS.map((brand) => (
+            {brands.map((brand) => (
               <Link
                 key={brand.slug}
                 href={brandHref(brand.name)}

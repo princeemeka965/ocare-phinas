@@ -86,6 +86,27 @@ export function solarInstallationScheduledEmail(input: {
   return { subject, html, text };
 }
 
+/** Password reset link — sent when a customer requests one from /forgot-password. */
+export function passwordResetEmail(link: string): { subject: string; html: string; text: string } {
+  const subject = "Reset your OCare Phinas password";
+  const text = `We received a request to reset your OCare Phinas password. Use this link to choose a new one: ${link}\n\nThis link expires in 30 minutes. If you didn't request this, you can ignore this email — your password won't change.`;
+  const html = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <h1 style="font-size:20px;margin:0 0 8px">Reset your password</h1>
+      <p style="color:#475569;font-size:14px;margin:0 0 20px">
+        We received a request to reset your OCare Phinas password. Click below to choose a new one.
+      </p>
+      <p style="text-align:center;margin:0 0 20px">
+        <a href="${escapeHtml(link)}" style="display:inline-block;background:#065f46;color:#fff;text-decoration:none;
+                  font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px">Reset password</a>
+      </p>
+      <p style="color:#94a3b8;font-size:12px;margin:0">
+        This link expires in 30 minutes. If you didn't request it, you can ignore this email — your password won't change.
+      </p>
+    </div>`;
+  return { subject, html, text };
+}
+
 /** Branded sign-up verification email for a 6-digit code. */
 export function otpEmail(code: string): { subject: string; html: string; text: string } {
   const subject = "Your OCare Phinas verification code";

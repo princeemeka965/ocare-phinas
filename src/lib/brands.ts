@@ -1,7 +1,9 @@
 /* ------------------------------------------------------------------ */
-/* Shared brand catalog — used by the homepage strip and /brands page   */
-/* Mock data — replace with DB query in Phase 3.                        */
-/* `productCount` is illustrative until the catalog is wired up.        */
+/* Curated brand presentation — hand-picked logos/taglines/featured flag */
+/* for brands we want to showcase. The actual brand list, slugs, and     */
+/* product counts come from the DB (`Brand` table via listBrands()); this */
+/* array only supplies visual polish for brands that match by slug, with */
+/* sensible fallbacks in resolveBrandMeta() for anything uncurated.       */
 /* ------------------------------------------------------------------ */
 
 export interface Brand {
@@ -79,4 +81,17 @@ export function resolveBrandLogo(brand: {
     };
   }
   return { name: brand.name, logoUrl: brand.logo ?? undefined };
+}
+
+/** Curated tagline/featured/dark-chip flags for a DB brand, with generic fallbacks for uncurated ones. */
+export function resolveBrandMeta(brand: {
+  name: string;
+  slug: string;
+}): { tagline: string; featured: boolean; darkChip: boolean } {
+  const curated = BRAND_BY_SLUG.get(brand.slug);
+  return {
+    tagline: curated?.tagline ?? `Genuine ${brand.name} products`,
+    featured: curated?.featured ?? false,
+    darkChip: curated?.darkChip ?? false,
+  };
 }

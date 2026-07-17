@@ -5,6 +5,7 @@ import { Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/store/toastStore";
+import { api, ApiError } from "@/lib/api";
 
 const SUBJECTS = [
   "General enquiry",
@@ -21,14 +22,25 @@ export function ContactForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    // Phase 3: wire up to the messaging / support API.
-    await new Promise((r) => setTimeout(r, 800));
-    setLoading(false);
-    e.currentTarget.reset();
-    toast.success(
-      "Thanks for reaching out — we'll get back to you shortly.",
-      "Message sent",
-    );
+    const fd = new FormData(e.currentTarget);
+    try {
+      await api.post("/api/contact", {
+        name: (fd.get("name") as string) || "",
+        email: (fd.get("email") as string) || "",
+        phone: (fd.get("phone") as string) || undefined,
+        subject: (fd.get("subject") as string) || "",
+        message: (fd.get("message") as string) || "",
+      });
+      e.currentTarget.reset();
+      toast.success(
+        "Thanks for reaching out — we'll get back to you shortly.",
+        "Message sent",
+      );
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't send your message. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const inputClass =

@@ -44,6 +44,8 @@ export default function ProfilePage() {
   const [plans, setPlans] = useState<ApiPlan[]>([]);
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const [saving, setSaving] = useState(false);
+  const [pwForm, setPwForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -108,6 +110,27 @@ export default function ProfilePage() {
       toast.error(err instanceof ApiError ? err.message : "Couldn't save your changes.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pwForm.newPassword !== pwForm.confirmPassword) {
+      toast.error("New password and confirmation don't match.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.patch("/api/auth/me/password", {
+        currentPassword: pwForm.currentPassword,
+        newPassword: pwForm.newPassword,
+      });
+      setPwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      toast.success("Your password has been changed.", "Saved");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't change your password.");
+    } finally {
+      setChangingPassword(false);
     }
   }
 
@@ -256,28 +279,47 @@ export default function ProfilePage() {
                 <Shield className="size-5 text-primary" />
                 <h2 className="text-body font-semibold">Security</h2>
               </div>
-              <form
-                className="space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  toast.info("To change your password, please contact support for now.", "Coming soon");
-                }}
-              >
+              <form className="space-y-4" onSubmit={handleChangePassword}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-body-sm font-medium">Current password</label>
-                    <input type="password" placeholder="••••••••" className={INPUT_CLASS} />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={pwForm.currentPassword}
+                      onChange={(e) => setPwForm((f) => ({ ...f, currentPassword: e.target.value }))}
+                      className={INPUT_CLASS}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-body-sm font-medium">New password</label>
-                    <input type="password" placeholder="At least 8 characters" className={INPUT_CLASS} />
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      placeholder="At least 8 characters"
+                      value={pwForm.newPassword}
+                      onChange={(e) => setPwForm((f) => ({ ...f, newPassword: e.target.value }))}
+                      className={INPUT_CLASS}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-body-sm font-medium">Confirm new password</label>
-                    <input type="password" placeholder="Repeat new password" className={INPUT_CLASS} />
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      placeholder="Repeat new password"
+                      value={pwForm.confirmPassword}
+                      onChange={(e) => setPwForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                      className={INPUT_CLASS}
+                    />
                   </div>
                 </div>
-                <Button type="submit" size="sm" variant="outline">Change password</Button>
+                <Button type="submit" size="sm" variant="outline" disabled={changingPassword}>
+                  {changingPassword ? "Changing…" : "Change password"}
+                </Button>
               </form>
             </div>
           </div>

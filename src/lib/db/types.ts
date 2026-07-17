@@ -227,6 +227,17 @@ export interface AdminPermissionGrant {
   permission: AdminPermission;
 }
 
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  subject: string;
+  message: string;
+  handled: boolean;
+  createdAt: string;
+}
+
 export interface Settings {
   id: string;
   storeName: string;

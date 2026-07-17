@@ -1,9 +1,8 @@
 /* ------------------------------------------------------------------ *
- * Orders — shared mock data + status model                            *
+ * Orders — shared status model + API → UI mapping                     *
  * ------------------------------------------------------------------ *
  * Single source of truth for admin order screens (list, dashboard,    *
  * detail) so references, ids and statuses stay coherent.              *
- * Phase 3: replace MOCK_ORDERS / getOrder with a real DB fetch.       *
  * ------------------------------------------------------------------ */
 
 import { ShoppingCart, User, Users, type LucideIcon } from "lucide-react";
@@ -119,117 +118,6 @@ export interface Order {
   shipping: { address: string; city: string; state: string; landmark?: string };
   /** Present for Solo / Group orders — drives the manual payment record. */
   plan?: OrderPlan;
-}
-
-const DELIVERY_FEE = 2500;
-
-const IMG = {
-  freezer: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=200&h=200&fit=crop&q=80",
-  phone: "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=200&h=200&fit=crop&q=80",
-  tv: "https://images.unsplash.com/photo-1593784991095-a205069470b6?w=200&h=200&fit=crop&q=80",
-  console: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=200&h=200&fit=crop&q=80",
-  laptop: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=200&h=200&fit=crop&q=80",
-};
-
-export const MOCK_ORDERS: Order[] = [
-  {
-    id: "1",
-    reference: "OCP-2026-00051",
-    date: "2026-05-29",
-    status: "payment_submitted",
-    paymentPlan: "outright",
-    deliveryMethod: "delivery",
-    customer: { name: "Adaeze Okonkwo", email: "adaeze@email.com", phone: "08011234567" },
-    items: [
-      { id: "i1", name: "Samsung Galaxy S24 Ultra 256GB", brand: "Samsung", condition: "new", price: 63490, qty: 1, image: IMG.phone },
-    ],
-    subtotal: 63490,
-    deliveryFee: DELIVERY_FEE,
-    total: 65990,
-    shipping: { address: "14 Marina Close, Victoria Island", city: "Lagos", state: "Lagos State", landmark: "Near First Bank" },
-  },
-  {
-    id: "2",
-    reference: "OCP-2026-00050",
-    date: "2026-05-28",
-    status: "processing",
-    paymentPlan: "outright",
-    deliveryMethod: "delivery",
-    customer: { name: "Emeka Nwosu", email: "emeka@email.com", phone: "08022345678" },
-    items: [
-      { id: "i1", name: "Sony PlayStation 5 Slim", brand: "Sony", condition: "new", price: 20490, qty: 1, image: IMG.console },
-    ],
-    subtotal: 20490,
-    deliveryFee: DELIVERY_FEE,
-    total: 22990,
-    shipping: { address: "7 Aba Road", city: "Port Harcourt", state: "Rivers State" },
-  },
-  {
-    id: "3",
-    reference: "OCP-2026-00049",
-    date: "2026-05-28",
-    status: "shipped",
-    paymentPlan: "outright",
-    deliveryMethod: "delivery",
-    customer: { name: "Bola Adesanya", email: "bola@email.com", phone: "08033456789" },
-    items: [
-      { id: "i1", name: "Hisense 43\" Smart TV", brand: "Hisense", condition: "new", price: 16400, qty: 1, image: IMG.tv },
-    ],
-    subtotal: 16400,
-    deliveryFee: DELIVERY_FEE,
-    total: 18900,
-    shipping: { address: "22 Ring Road", city: "Ibadan", state: "Oyo State", landmark: "Opposite Cocoa House" },
-  },
-  {
-    id: "4",
-    reference: "OCP-2026-00048",
-    date: "2026-04-05",
-    // Solo: past 50% so delivered, now finishing the balance — and one week behind.
-    status: "delivered",
-    paymentPlan: "solo",
-    deliveryMethod: "delivery",
-    customer: { name: "Chukwuemeka Anyanwu", email: "anyanwue4@gmail.com", phone: "08044567890" },
-    items: [
-      { id: "i1", name: "HP Pavilion 15 Laptop", brand: "HP", condition: "new", price: 77490, qty: 1, image: IMG.laptop },
-    ],
-    subtotal: 77490,
-    deliveryFee: DELIVERY_FEE,
-    total: 79990,
-    shipping: { address: "3 Awolowo Avenue, Bodija", city: "Ibadan", state: "Oyo State" },
-    // ₦7,000/week chosen by the customer; 7 of 12 weeks confirmed (~63%).
-    plan: {
-      id: "mock-plan-4", productPrice: 77490, deliveryFee: 0, perPayment: 7000, frequency: "weekly",
-      startDate: "2026-04-05", paidIndices: [1, 2, 3, 4, 5, 6, 7],
-      type: "solo", status: "delivered", slots: 2, productId: "mock-product-4", amountAllocated: 49000,
-    },
-  },
-  {
-    id: "5",
-    reference: "OCP-2026-00047",
-    date: "2026-05-20",
-    // Group: still collecting (below 100%), behind on a few daily payments.
-    status: "in_plan",
-    paymentPlan: "group",
-    deliveryMethod: "delivery",
-    customer: { name: "Ngozi Eze", email: "ngozi@email.com", phone: "08055678901" },
-    items: [
-      { id: "i1", name: "Haier Thermocool Chest Freezer 200L", brand: "Haier Thermocool", condition: "new", price: 60000, qty: 1, image: IMG.freezer },
-    ],
-    subtotal: 60000,
-    deliveryFee: DELIVERY_FEE,
-    total: 62500,
-    shipping: { address: "18 Nnamdi Azikiwe Street", city: "Enugu", state: "Enugu State" },
-    // Strict slot daily of ₦2,000 (2 slots); 12 of 30 days confirmed (40%).
-    plan: {
-      id: "mock-plan-5", productPrice: 60000, deliveryFee: 0, perPayment: 2000, frequency: "daily",
-      startDate: "2026-05-20", paidIndices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-      type: "group", status: "active", slots: 2, productId: "mock-product-5", amountAllocated: 24000,
-    },
-  },
-];
-
-export function getOrder(id: string): Order | undefined {
-  return MOCK_ORDERS.find((o) => o.id === id);
 }
 
 /* ------------------------------------------------------------------ *
