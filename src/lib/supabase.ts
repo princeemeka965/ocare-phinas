@@ -19,7 +19,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceKey) {
   throw new Error(
-    "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env",
+    "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env (or in Netlify: Site Configuration > Environment variables).",
   );
 }
 

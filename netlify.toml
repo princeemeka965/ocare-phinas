@@ -1,0 +1,16 @@
+# Netlify Configuration for OCare Phinas (Next.js 16 + React 19)
+
+[build]
+  command = "yarn build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Official Next.js Runtime plugin for App Router, SSR, and API routes
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  directory = "netlify/functions"
+
