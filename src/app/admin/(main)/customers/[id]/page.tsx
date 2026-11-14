@@ -93,8 +93,9 @@ export default function CustomerDetailPage({ params }: PageProps) {
   const w = customer.wallet;
   const balance = w.total;
 
-  const soloAllocations = customer.plans.filter((p) => p.type === "solo").reduce((s, p) => s + p.amountAllocated, 0);
-  const groupAllocations = customer.plans.filter((p) => p.type === "group").reduce((s, p) => s + p.amountAllocated, 0);
+  const openPlans = customer.plans.filter((p) => p.status !== "completed" && p.status !== "cancelled");
+  const soloAllocations = openPlans.filter((p) => p.type === "solo").reduce((s, p) => s + p.amountAllocated, 0);
+  const groupAllocations = openPlans.filter((p) => p.type === "group").reduce((s, p) => s + p.amountAllocated, 0);
 
   const arrearsPlans = customer.plans.filter((p) => p.health && isArrears(p.health.status));
   const hasOverdue = arrearsPlans.some((p) => p.health!.status === "overdue");
@@ -104,10 +105,10 @@ export default function CustomerDetailPage({ params }: PageProps) {
     new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 
   const walletCells = [
-    { label: "Solo payments", value: soloAllocations },
-    { label: "Group payments", value: groupAllocations },
+    { label: "Solo ongoing", value: soloAllocations },
+    { label: "Group ongoing", value: groupAllocations },
     { label: "Available balance", value: w.available },
-    { label: "Spent on products", value: w.spentOnProducts },
+    { label: "Fulfilled products", value: w.spentOnProducts },
   ];
 
   return (
@@ -231,7 +232,7 @@ export default function CustomerDetailPage({ params }: PageProps) {
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-1">
             <Wallet className="size-4 text-white/70" />
-            <span className="text-caption font-semibold text-white/70 uppercase tracking-wide">Wallet balance</span>
+            <span className="text-caption font-semibold text-white/70 uppercase tracking-wide">Active wallet balance</span>
           </div>
           <p className="text-display font-bold text-white leading-none mb-6">{naira(balance)}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -243,7 +244,7 @@ export default function CustomerDetailPage({ params }: PageProps) {
             ))}
           </div>
           <p className="text-caption text-white/60 mt-4">
-            Money is never withdrawn as cash — allocations and available balance only ever become products.
+            Wallet balance reflects active on-going payments and returns to ₦0 once items are completed and delivered.
           </p>
         </div>
       </div>

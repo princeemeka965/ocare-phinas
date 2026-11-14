@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { HEALTH_META } from "@/lib/payment-health";
+import { naira } from "@/lib/pay-small-small";
 
 const PLAN_ICON = { solo: User, group: Users } as const;
 
@@ -134,6 +135,9 @@ export function CustomersList() {
                 {/* Orders + status */}
                 <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
                   <span className="text-caption text-muted-foreground"><span className="font-semibold text-foreground">{c.orderCount}</span> orders</span>
+                  {c.walletBalance > 0 && (
+                    <span className="text-micro text-primary font-medium">{naira(c.walletBalance)} ongoing</span>
+                  )}
                   {arrears && (
                     <Badge variant={HEALTH_META[arrears].badge} className="text-micro gap-1">
                       {arrears === "overdue" ? <AlertTriangle className="size-3" /> : <Clock className="size-3" />}

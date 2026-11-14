@@ -28,9 +28,14 @@ export async function GET() {
   const totalBalance = wallet?.totalBalance ?? 0;
   const spentOnProducts = wallet?.spentOnProducts ?? 0;
 
+  // Active wallet balance reflects on-going payments and uncommitted credit only.
+  // Once an item is fully paid and delivered (completed), it drops back to 0.
+  const activeBalance = Math.max(0, totalBalance - spentOnProducts);
+
   return NextResponse.json({
     wallet: {
-      total: totalBalance,
+      total: activeBalance,
+      lifetimeTotal: totalBalance,
       available,
       spentOnProducts,
       soloAllocations,

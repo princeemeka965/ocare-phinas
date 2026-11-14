@@ -278,27 +278,31 @@ export function MyPlanBoard() {
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-1">
               <Wallet className="size-4 text-white/70" />
-              <span className="text-caption font-semibold text-white/70 uppercase tracking-wide">Wallet balance</span>
+              <span className="text-caption font-semibold text-white/70 uppercase tracking-wide">Active wallet balance</span>
             </div>
             <p className="text-display font-bold text-white leading-none mb-6">{naira(wallet.total)}</p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4">
-                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Group allocations</p>
+                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Group ongoing</p>
                 <p className="text-body font-bold text-white">{naira(wallet.groupAllocations)}</p>
               </div>
               <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4">
-                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Solo allocations</p>
+                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Solo ongoing</p>
                 <p className="text-body font-bold text-white">{naira(wallet.soloAllocations)}</p>
               </div>
-              <div className="rounded-2xl bg-white/15 backdrop-blur-sm p-4 col-span-2 sm:col-span-1">
-                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Available balance</p>
+              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4">
+                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Available credit</p>
                 <p className="text-body font-bold text-white">{naira(wallet.available)}</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4">
+                <p className="text-micro text-white/60 uppercase tracking-wide mb-1">Fulfilled goods</p>
+                <p className="text-body font-bold text-white">{naira(wallet.spentOnProducts)}</p>
               </div>
             </div>
 
             <p className="text-caption text-white/60 mt-4">
-              Available balance can start a new plan or convert at a cycle&apos;s end — it can never be withdrawn as cash.
+              Wallet balance reflects active on-going payments and returns to ₦0 once items are fully paid and delivered.
             </p>
           </div>
         </div>

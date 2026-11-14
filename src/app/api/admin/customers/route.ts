@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       blocked: c.blocked,
       joined: c.createdAt,
       orderCount: c.orders[0]?.count ?? 0,
-      walletBalance: c.wallet?.totalBalance ?? 0,
+      walletBalance: c.wallet ? Math.max(0, c.wallet.totalBalance - c.wallet.spentOnProducts) : 0,
       plans: payablePlans.map((p) => {
         const order = Array.isArray(p.order) ? (p.order[0] ?? null) : p.order;
         return { type: p.type, reference: order?.reference ?? null };

@@ -72,7 +72,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
       blocked: customer.blocked,
       joined: customer.createdAt,
       wallet: {
-        total: customer.wallet?.totalBalance ?? 0,
+        total: Math.max(0, (customer.wallet?.totalBalance ?? 0) - (customer.wallet?.spentOnProducts ?? 0)),
+        lifetimeTotal: customer.wallet?.totalBalance ?? 0,
         available,
         spentOnProducts: customer.wallet?.spentOnProducts ?? 0,
       },
