@@ -12,7 +12,7 @@ export function Logo({ className, variant = "full" }: LogoProps) {
     return (
       <div className={cn("relative size-10", className)}>
         <Image
-          src="/OCARE_PHINAS_logo.png"
+          src="/OCARE_PHINAS_logo.webp"
           alt="OCare Phinas"
           fill
           className="object-contain"

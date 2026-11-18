@@ -31,24 +31,24 @@ export interface CategoryPresentation {
 }
 
 const PRESENTATION: Record<string, CategoryPresentation> = {
-  phones: { icon: Smartphone, color: "text-cyan-500", image: "/categories/phones.png" },
-  laptops: { icon: Laptop, color: "text-blue-500", image: "/categories/laptops.png" },
-  tablets: { icon: TabletSmartphone, color: "text-emerald-500", image: "/categories/tablets.png" },
-  audio: { icon: Headphones, color: "text-purple-500", image: "/categories/audio.png" },
+  phones: { icon: Smartphone, color: "text-cyan-500", image: "/categories/phones.webp" },
+  laptops: { icon: Laptop, color: "text-blue-500", image: "/categories/laptops.webp" },
+  tablets: { icon: TabletSmartphone, color: "text-emerald-500", image: "/categories/tablets.webp" },
+  audio: { icon: Headphones, color: "text-purple-500", image: "/categories/audio.webp" },
   "home-appliances": {
     icon: Tv,
     color: "text-orange-500",
-    image: "/categories/appliances.png",
+    image: "/categories/appliances.webp",
     navLabel: "Appliances",
     tileLabel: "Appliances",
   },
-  accessories: { icon: Cable, color: "text-rose-500", image: "/categories/accessories.png" },
-  gaming: { icon: Gamepad2, color: "text-red-500", image: "/categories/gaming.png" },
-  cameras: { icon: Camera, color: "text-slate-500", image: "/categories/cameras.png" },
+  accessories: { icon: Cable, color: "text-rose-500", image: "/categories/accessories.webp" },
+  gaming: { icon: Gamepad2, color: "text-red-500", image: "/categories/gaming.webp" },
+  cameras: { icon: Camera, color: "text-slate-500", image: "/categories/cameras.webp" },
   "pre-owned": {
     icon: RefreshCw,
     color: "text-amber-500",
-    image: "/categories/pre-owned.png",
+    image: "/categories/pre-owned.webp",
     tileLabel: "Pre-owned (Tokunbo)",
   },
 };
@@ -58,7 +58,7 @@ export function categoryPresentation(slug: string): CategoryPresentation {
     PRESENTATION[slug] ?? {
       icon: Package,
       color: "text-primary",
-      image: `/categories/${slug}.png`,
+      image: `/categories/${slug}.webp`,
     }
   );
 }
